@@ -1,0 +1,1310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GAARO · Your guard</title>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#141a22; --panel2:#1b2530; --line:#232f3c;
+    --ink:#eef3f8; --mut:#8d9cad; --gold:#f0b429; --gold-dim:#c8941f;
+    --ok:#34d399; --bad:#f4636b; --r:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:radial-gradient(1200px 600px at 50% -10%, #11171f 0%, var(--bg) 55%);
+    color:var(--ink); font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wordmark{font-weight:800; letter-spacing:.18em; font-size:14px}
+  .watch{position:relative; width:14px; height:14px; flex:0 0 auto}
+  .watch::before{content:""; position:absolute; inset:3px; border-radius:50%; background:var(--gold); box-shadow:0 0 10px var(--gold)}
+  .watch::after{content:""; position:absolute; inset:0; border-radius:50%; border:1.5px solid var(--gold); opacity:.7; animation:pulse 2.4s ease-out infinite}
+  @keyframes pulse{0%{transform:scale(.55);opacity:.85} 100%{transform:scale(1.9);opacity:0}}
+  @media (prefers-reduced-motion:reduce){.watch::after{animation:none;opacity:.4}}
+
+  .center{min-height:100%; display:grid; place-items:center; padding:24px}
+  .auth{width:100%; max-width:380px}
+  .lock{display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:22px}
+  .lock .ring{width:54px; height:54px; border-radius:50%; display:grid; place-items:center;
+    background:radial-gradient(circle at 50% 40%, rgba(240,180,41,.18), transparent 70%); border:1px solid var(--line)}
+  .lock .watch{width:18px;height:18px}
+  .lock h1{margin:0; font-size:20px; letter-spacing:-.01em}
+  .lock p{margin:0; color:var(--mut); font-size:13.5px; text-align:center}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:20px}
+  label{display:block; color:var(--mut); font-size:12px; margin:12px 0 6px; letter-spacing:.01em}
+  input{width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:#0d141d; color:var(--ink); font-size:15px; outline:none}
+  input:focus{border-color:var(--gold-dim); box-shadow:0 0 0 3px rgba(240,180,41,.12)}
+  button{font:inherit; cursor:pointer; border-radius:10px; border:1px solid var(--line); background:#16202c; color:var(--ink); padding:11px 14px}
+  button:disabled{opacity:.5; cursor:default}
+  button.gold{background:var(--gold); border-color:var(--gold); color:#1a1205; font-weight:700; width:100%; margin-top:18px}
+  button.gold:hover{background:#f6c13f}
+  button.scan{background:var(--gold); border-color:var(--gold); color:#1a1205; font-weight:700; min-width:160px}
+  button.scan:hover{background:#f6c13f}
+  button.ok{background:var(--ok); border-color:var(--ok); color:#04140d; font-weight:700}
+  button.bad{background:transparent; border-color:var(--bad); color:var(--bad)}
+  button.ghost{background:transparent}
+  .err{color:var(--bad); font-size:13px; margin-top:12px; min-height:1.2em}
+  .alt{color:var(--mut); font-size:12.5px; text-align:center; margin-top:16px}
+  .alt a, .link{color:var(--gold-dim); cursor:pointer; text-decoration:none}
+  .hidden{display:none !important}
+
+  .topbar{position:sticky; top:0; z-index:5; display:flex; align-items:center; gap:10px;
+    padding:13px 16px; background:rgba(11,14,19,.85); backdrop-filter:blur(8px); border-bottom:1px solid var(--line)}
+  .topbar .who{margin-left:auto; color:var(--mut); font-size:13px}
+  .topbar button{padding:7px 11px; font-size:13px}
+  main{max-width:680px; margin:0 auto; padding:18px 16px 60px}
+  section.card{margin-bottom:16px; padding:18px}
+  h2{margin:0 0 4px; font-size:15.5px; letter-spacing:-.01em}
+  .sub{color:var(--mut); font-size:13px; margin:0 0 14px}
+  .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+
+  /* guided scan */
+  .scanwrap{position:relative; width:100%; max-width:420px; aspect-ratio:4/3; margin:6px 0 4px}
+  .scanwrap video{width:100%; height:100%; object-fit:cover; border-radius:14px; transform:scaleX(-1); background:#05080c; display:block}
+  .scanwrap canvas{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
+  .scanhint{color:var(--mut); font-size:12.5px; min-height:1.2em; margin-top:4px}
+
+  .shots{display:flex; gap:8px; flex-wrap:wrap; margin:12px 0}
+  .shots img{width:58px; height:74px; object-fit:cover; border-radius:9px; border:1px solid var(--line)}
+  .msg{font-size:13px; margin-top:10px} .msg.ok{color:var(--ok)} .msg.bad{color:var(--bad)} .msg.mut{color:var(--mut)}
+  .person{display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-top:1px solid var(--line)}
+  .person:first-child{border-top:0} .person small{color:var(--mut)}
+  .cand{display:flex; gap:12px; align-items:center; padding:12px 0; border-top:1px solid var(--line)}
+  .cand:first-child{border-top:0}
+  .cand img{width:60px; height:60px; object-fit:cover; border-radius:12px; border:1px solid var(--line); background:#05080c}
+  .pill{font-size:11px; color:var(--mut); border:1px solid var(--line); border-radius:999px; padding:2px 9px}
+  .note{color:var(--mut); font-size:12px; border-left:2px solid var(--gold-dim); padding-left:11px; margin-top:14px}
+  code{background:#0d141d; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:12.5px}
+  .msg.warn{color:var(--gold)}
+
+  /* coverage radar + quality checks */
+  /* enrollment head-coverage graphic */
+  .coachmsg{ text-align:center; font-size:13px; color:var(--mut); margin:12px 0 6px; }
+  .coachmsg b{ color:var(--gold); }
+  .headwrap{ display:flex; justify-content:center; margin:2px 0 10px; }
+  .headcov{ width:190px; height:190px; }
+  .headcov .arc{ fill:none; stroke:var(--line); stroke-width:11; stroke-linecap:round; transition:stroke .35s; }
+  .headcov .arc.on{ stroke:var(--ok); }
+  .headcov .head ellipse, .headcov .head path{ fill:#0f1922; stroke:var(--mut); stroke-width:2; transition:all .35s; }
+  .headcov .head.on ellipse, .headcov .head.on path{ fill:rgba(52,211,153,.22); stroke:var(--ok); }
+  .headcov .lbl{ fill:var(--mut); font-size:11px; font-weight:600; text-anchor:middle; transition:fill .35s; }
+  .headcov .lbl.on{ fill:var(--ok); }
+  .headcov .pct{ fill:var(--ink, #e7edf3); font-size:15px; font-weight:700; text-anchor:middle; }
+  .views{ display:grid; grid-template-columns:repeat(5,1fr); gap:7px; margin-bottom:10px; }
+  .view{ text-align:center; }
+  .vthumb{ aspect-ratio:1; border-radius:9px; border:1px solid var(--line); background:#0c1217 center/cover no-repeat; display:grid; place-items:center; color:var(--mut); font-size:16px; }
+  .vthumb.on{ border-color:var(--ok); color:transparent; }
+  .view span{ display:block; font-size:10.5px; color:var(--mut); margin-top:3px; }
+  .view.on span{ color:var(--ok); }
+  .checks div{font-size:12.5px; padding:2px 0}
+  .checks .yes{color:var(--ok)} .checks .warn{color:var(--gold)} .checks .no{color:var(--mut)}
+
+  /* live recognition */
+  .livewrap{position:relative; width:100%; max-width:480px; aspect-ratio:4/3; margin:6px 0}
+  .livewrap video{width:100%; height:100%; object-fit:cover; border-radius:14px; transform:scaleX(-1); background:#05080c; display:block}
+  .livewrap canvas{position:absolute; inset:0; width:100%; height:100%; pointer-events:none}
+  .decision{font-size:13.5px; margin-top:8px; padding:8px 12px; border-radius:10px; border:1px solid var(--line); display:inline-block; color:var(--mut)}
+  .decision.quiet{color:var(--ok); border-color:var(--ok); background:rgba(52,211,153,.10)}
+  .decision.alert{color:var(--bad); border-color:var(--bad); background:rgba(244,99,107,.10)}
+  /* tabs */
+  .tabbar{ display:flex; gap:6px; padding:14px 16px 0; max-width:680px; margin:0 auto; }
+  .tab{ flex:1; background:transparent; border:1px solid var(--line); border-bottom:2px solid transparent; color:var(--mut); padding:11px 12px; border-radius:11px 11px 0 0; font-size:14px; font-weight:600; cursor:pointer; transition:all .2s; }
+  .tab.on{ color:var(--gold); border-color:var(--gold-dim); border-bottom-color:var(--gold); background:rgba(217,164,65,.07); }
+  /* recognition history */
+  .evrow{ display:flex; align-items:center; gap:12px; padding:9px 0; border-bottom:1px solid var(--line); }
+  .evrow:last-child{ border-bottom:0; }
+  .evthumb{ width:48px; height:48px; border-radius:9px; object-fit:cover; background:#0c1217; flex:none; }
+  .evthumb.noimg{ display:grid; place-items:center; color:var(--mut); border:1px solid var(--line); font-size:18px; }
+  .evmeta{ flex:1; min-width:0; }
+  .evname{ font-weight:600; font-size:14px; } .evname.k{ color:var(--ok); } .evname.u{ color:var(--bad); }
+  .evsub{ color:var(--mut); font-size:12px; margin-top:1px; }
+  .evdel{ background:transparent; border:1px solid var(--line); color:var(--mut); width:30px; height:30px; border-radius:8px; cursor:pointer; font-size:17px; line-height:1; flex:none; }
+  .evdel:hover{ color:var(--bad); border-color:var(--bad); }
+  select{ width:100%; padding:11px 13px; border-radius:10px; border:1px solid var(--line); background:#0d141d; color:var(--ink); font-size:15px; outline:none; }
+  .pcard{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:13px 14px; margin-top:11px; }
+  .pcard.sealed{ border-color:var(--gold-dim); background:#171a16; }
+  .psteps{ margin-top:4px; }
+  .pstep{ background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:9px 11px; margin-top:7px; }
+  .pstep-h{ font-size:13.5px; font-weight:600; margin-bottom:2px; }
+  .prow{ display:flex; align-items:center; gap:10px; margin-top:6px; }
+  .prow span.k{ color:var(--mut); font-size:12.5px; min-width:78px; text-transform:capitalize; }
+  .prow input, .prow select{ flex:1; }
+  .msg.yes{ color:var(--ok); } .msg.bad{ color:var(--bad); }
+</style>
+</head>
+<body>
+
+<!-- file:// notice -->
+<div id="screen-file" class="center hidden">
+  <div class="auth">
+    <div class="lock"><div class="ring"><div class="watch"></div></div>
+      <h1>Open the app properly</h1>
+      <p>Your browser blocks the camera on a <code>file://</code> page. Open the guard's address instead.</p></div>
+    <div class="card">
+      <p class="sub" style="margin:0 0 10px">With the guard running, open:</p>
+      <p style="margin:0"><code>http://localhost:8787/</code></p>
+      <p class="note">Same app, served by the guard — camera and sign-in work there.</p>
+    </div>
+  </div>
+</div>
+
+<!-- auth -->
+<div id="screen-auth" class="center hidden">
+  <div class="auth">
+    <div class="lock"><div class="ring"><div class="watch"></div></div>
+      <h1 id="auth-title">GAARO</h1><p id="auth-sub">Connecting to your guard…</p></div>
+    <div class="card">
+      <div id="auth-fields"></div>
+      <button id="auth-go" class="gold" disabled>Continue</button>
+      <div class="err" id="auth-err"></div>
+    </div>
+    <div class="alt" id="auth-alt"></div>
+  </div>
+</div>
+
+<!-- app -->
+<div id="screen-app" class="hidden">
+  <div class="topbar">
+    <div class="watch"></div><div class="wordmark">GAARO</div>
+    <span class="who" id="who"></span>
+    <button id="signout" class="ghost">Sign out</button>
+  </div>
+  <div class="tabbar">
+    <button class="tab on" data-panel="live">Live</button>
+    <button class="tab" data-panel="enroll">Enroll &amp; review</button>
+    <button class="tab" data-panel="protocols">Standing orders</button>
+    <button class="tab" data-panel="remote">Remote</button>
+  </div>
+  <main>
+    <section class="card" data-tab="enroll">
+      <h2>Add a face</h2>
+      <p class="sub">One scan. Look at the camera and slowly turn your head — the mesh fills green as it captures every angle.</p>
+      <label>Who is this?</label>
+      <input id="name" placeholder="e.g. Dad" autocomplete="off" />
+
+      <div class="scanwrap" id="scanwrap">
+        <video id="cam" autoplay playsinline muted></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="scan" class="scan">Scan face</button>
+        <span id="scanmsg" class="msg mut"></span>
+      </div>
+      <div id="coverage" class="hidden">
+        <div class="coachmsg" id="coachmsg"><span id="coachtext">Let's capture your face from a few angles</span> <span class="pill" id="cov-pct">0%</span></div>
+        <div class="headwrap">
+          <svg class="headcov" viewBox="0 0 220 220" aria-hidden="true">
+            <path id="arc-up"    class="arc" d="M71.1 26.6 A92 92 0 0 1 148.9 26.6"/>
+            <path id="arc-right" class="arc" d="M193.4 71.1 A92 92 0 0 1 193.4 148.9"/>
+            <path id="arc-down"  class="arc" d="M148.9 193.4 A92 92 0 0 1 71.1 193.4"/>
+            <path id="arc-left"  class="arc" d="M26.6 148.9 A92 92 0 0 1 26.6 71.1"/>
+            <text class="lbl" id="lbl-up"    x="110" y="18">UP</text>
+            <text class="lbl" id="lbl-down"  x="110" y="210">DOWN</text>
+            <text class="lbl" id="lbl-left"  x="14"  y="114" transform="rotate(-90 14 114)">LEFT</text>
+            <text class="lbl" id="lbl-right" x="206" y="114" transform="rotate(90 206 114)">RIGHT</text>
+            <g id="head-front" class="head">
+              <ellipse cx="110" cy="92" rx="33" ry="40"/>
+              <path d="M70 158 q40 26 80 0 q4 18 6 30 h-92 q2 -12 6 -30 z"/>
+            </g>
+            <text class="pct" id="cov-pct-svg" x="110" y="150">0%</text>
+          </svg>
+        </div>
+        <div class="views">
+          <div class="view" id="view-front"><div class="vthumb" id="v-front">↑</div><span>Front</span></div>
+          <div class="view" id="view-left"><div class="vthumb" id="v-left">←</div><span>Left</span></div>
+          <div class="view" id="view-right"><div class="vthumb" id="v-right">→</div><span>Right</span></div>
+          <div class="view" id="view-up"><div class="vthumb" id="v-up">▲</div><span>Up</span></div>
+          <div class="view" id="view-down"><div class="vthumb" id="v-down">▼</div><span>Down</span></div>
+        </div>
+        <div class="checks" id="checks"></div>
+        <p class="note" style="margin-top:6px">More angles → more reliable recognition. (Your guard stores several 2-D face templates from these views — not a 3-D model.)</p>
+      </div>
+      <div class="scanhint" id="scanhint"></div>
+      <div style="margin-top:8px"><a class="link" id="usemanual">Trouble scanning? Capture manually</a></div>
+
+      <!-- manual fallback -->
+      <div id="manual" class="hidden">
+        <div class="row" style="margin-top:12px">
+          <button id="startcam">Start camera</button>
+          <button id="shot" disabled>Capture angle</button>
+          <span id="count" class="msg mut">0 captured</span>
+        </div>
+        <div class="shots" id="shots"></div>
+        <div class="row" style="margin-top:6px"><button id="enroll" class="ok" disabled>Add to guard</button><span id="emsg" class="msg mut"></span></div>
+      </div>
+
+      <p class="note">The frames go to your guard, become face-math there, and the images are discarded. Only the math is kept — on the device, never the cloud.</p>
+    </section>
+
+    <section class="card" data-tab="enroll">
+      <h2>Faces to confirm</h2>
+      <p class="sub">The guard saw these and isn't certain — usually a known person at a new angle.</p>
+      <div id="queue"><p class="msg mut">—</p></div>
+    </section>
+
+    <section class="card" data-tab="enroll">
+      <h2>Who your guard knows</h2>
+      <div id="roster"><p class="msg mut">—</p></div>
+    </section>
+
+    <section class="card" data-tab="enroll">
+      <h2>Test recognition <span class="pill">this device's camera</span></h2>
+      <p class="sub">Point <em>this device's</em> camera at a face to check the guard recognizes it — a quick way to confirm an enrollment worked. (The guard's real eye is the door camera, on the Live tab. Identity grades urgency; it never silences an event.)</p>
+      <div class="livewrap" id="livewrap">
+        <video id="livecam" autoplay playsinline muted></video>
+        <canvas id="liveoverlay"></canvas>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="livestart" class="scan">Start camera test</button>
+        <button id="livestop" class="ghost hidden">Stop</button>
+      </div>
+      <div id="decision" class="decision hidden"></div>
+    </section>
+
+    <section class="card" data-tab="live">
+      <h2>At the door <span class="pill">FD camera</span></h2>
+      <p class="sub">Recognition on your actual door camera — the real test. Faces here are farther and angled, so confidence runs lower than the selfie view. That gap is the real-world signal.</p>
+      <div class="livewrap" id="doorwrap" style="aspect-ratio:16/9; max-width:560px">
+        <img id="doorimg" alt="door camera" style="width:100%;height:100%;object-fit:cover;border-radius:14px;background:#05080c;display:block"/>
+        <canvas id="dooroverlay"></canvas>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="doorstart" class="scan">Watch the door</button>
+        <button id="doorstop" class="ghost hidden">Stop</button>
+      </div>
+      <div id="doordecision" class="decision hidden"></div>
+    </section>
+
+    <section class="card" data-tab="live">
+      <div class="row" style="justify-content:space-between; align-items:center">
+        <h2 style="margin:0">History <span class="pill">who's been seen</span></h2>
+        <button id="evclear" class="ghost" style="font-size:12px; padding:6px 11px">Clear all</button>
+      </div>
+      <p class="sub">Everyone the guard recognized at the camera — known <span style="color:var(--ok)">and</span> unknown — newest first. Snapshots stay on your guard. Tap × to remove one.</p>
+      <div id="events"><p class="msg mut">No recognitions yet — start a live view, or wait for the guard to see someone at the door.</p></div>
+    </section>
+    <section class="card" data-tab="protocols">
+      <h2>Standing orders <span class="pill">how your guard acts</span></h2>
+      <p class="sub">Your guard follows these procedures. The sealed safety alert always runs and can't be changed — everything else you can turn on, off, or tune. A procedure can only <em>add</em> actions; it can never silence the safety alert.</p>
+      <div id="protocols"><p class="msg mut">Loading…</p></div>
+      <div class="row" style="margin-top:12px; justify-content:space-between; align-items:center">
+        <a class="link" id="proto-reset">Reset to defaults</a>
+        <span id="proto-msg" class="msg mut"></span>
+      </div>
+      <h2 style="margin-top:22px">Recent activity <span class="pill">what your guard did</span></h2>
+      <div id="proto-runs"><p class="msg mut">No procedure has run yet.</p></div>
+    </section>
+    <section class="card" data-tab="remote">
+      <h2>Remote access <span class="pill">reach your guard away from home</span></h2>
+      <p class="sub">Pair this guard with your cloud account so you can reach it when you're not on the same Wi-Fi. The guard only ever <em>dials out</em> — nothing inbound is opened, and your face data never leaves the guard.</p>
+      <div id="pairstate"><p class="msg mut">Checking…</p></div>
+      <div id="pairform" class="hidden">
+        <label>Your account email</label>
+        <input id="pair-email" type="email" placeholder="you@example.com" autocomplete="username"/>
+        <label>Password</label>
+        <input id="pair-pass" type="password" autocomplete="current-password"/>
+        <label>Name this guard</label>
+        <input id="pair-name" placeholder="Front door guard"/>
+        <button id="pair-go" class="ok" style="margin-top:10px">Sign in &amp; pair this guard</button>
+        <span id="pair-msg" class="msg mut"></span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const LS = window.localStorage;
+let BASE = LS.getItem("gaaro_base") || guessBase();
+const HOSTED = !(location.port === "8787" || location.port === "8788");
+function guessBase(){
+  if (location.port === "8787" || location.port === "8788") return location.origin;  // served by the guard itself
+  return "";   // hosted elsewhere (e.g. GitHub Pages) — the user enters the guard's HTTPS address
+}
+let SESSION = LS.getItem("gaaro_session") || "";
+
+function show(id){ for(const s of ["screen-file","screen-auth","screen-app"]) $("#"+s).classList.toggle("hidden", s!==id); }
+function hdrs(){ return {"Content-Type":"application/json","X-SCC-LAN-Token":SESSION}; }
+async function api(path, opts){
+  // The hosted web app is the always-available client: REMOTE-FIRST. Control routes go through the cloud
+  // relay so the experience is identical home or away. The guard-served page (opened on the guard's own
+  // address at home) is the only LAN path — and the only place biometric/live operations (enroll, live
+  // view) can run, because those never traverse the cloud (D-10 / D-20).
+  opts = opts || {};
+  const method = (opts.method || "GET").toUpperCase();
+  const url = BASE.replace(/\/$/,"")+path;
+  if(!HOSTED){
+    return fetch(url, opts);                  // guard-served at home: same-origin LAN, everything works
+  }
+  if(remoteCreds() && remoteAllowed(method, path)){
+    return apiRemote(path, opts);             // hosted: SAFE control surface -> cloud relay, always
+  }
+  if(BASE){
+    return fetch(url, opts);                  // hosted, but a LAN guard address is set -> direct (at-home option)
+  }
+  return _shim(503, {error:"This needs your guard directly — open it at home (its own address) to add faces or watch live video."});
+}
+
+// ---------- boot ----------
+(async function init(){
+  if(location.protocol === "file:"){ show("screen-file"); return; }
+  show("screen-auth");
+  if(SESSION){ try{ if((await api("/health",{headers:hdrs()})).ok) return enterApp(); }catch(e){} }
+  renderAuth();
+})();
+
+// ---------- auth ----------
+async function renderAuth(){
+  let setupRequired=false, reachable=true;
+  try{ const j=await (await api("/auth/status")).json(); setupRequired=!!j.setup_required; }
+  catch(e){ reachable=false; }
+  if(!reachable){
+    $("#auth-title").textContent = HOSTED ? "Connect to your guard" : "Can't reach your guard";
+    $("#auth-sub").innerHTML = HOSTED
+      ? "This hosted app needs your guard's <b>HTTPS</b> address. Start the guard with <code>GAARO_HTTPS=on</code>, then enter <code>https://&lt;guard-ip&gt;:8788</code> below. First time only: open that address directly in this browser once and accept the certificate warning."
+      : "Make sure the guard is running, then try its address.";
+    $("#auth-fields").innerHTML=`<label>Guard address</label><input id="f-base" value="${BASE}" placeholder="https://192.168.1.5:8788"/>`;
+    $("#auth-go").textContent="Connect"; $("#auth-go").disabled=false; $("#auth-alt").innerHTML="";
+    $("#auth-go").onclick=()=>{ BASE=$("#f-base").value.trim(); LS.setItem("gaaro_base",BASE); renderAuth(); };
+    bindEnable(["f-base"]); return;
+  }
+  if(setupRequired){
+    $("#auth-title").textContent="Set up your guard";
+    $("#auth-sub").textContent="Create the login you'll use on this guard. Just this once.";
+    $("#auth-fields").innerHTML=
+      `<label>Choose a username</label><input id="f-user" autocomplete="username"/>
+       <label>Choose a password</label><input id="f-pass" type="password" autocomplete="new-password"/>
+       <label>Confirm password</label><input id="f-pass2" type="password" autocomplete="new-password"/>`;
+    $("#auth-go").textContent="Create login"; $("#auth-go").onclick=doSetup; $("#auth-alt").innerHTML="";
+    bindEnable(["f-user","f-pass","f-pass2"]);
+  } else {
+    $("#auth-title").textContent="Sign in";
+    $("#auth-sub").textContent="Welcome back. Sign in to manage who your guard knows.";
+    $("#auth-fields").innerHTML=
+      `<label>Username</label><input id="f-user" autocomplete="username"/>
+       <label>Password</label><input id="f-pass" type="password" autocomplete="current-password"/>`;
+    $("#auth-go").textContent="Sign in"; $("#auth-go").onclick=doLogin;
+    $("#auth-alt").innerHTML=`Wrong guard? <a id="setaddr">Set its address</a>`;
+    $("#setaddr").onclick=()=>{ $("#auth-fields").insertAdjacentHTML("beforeend",`<label>Guard address</label><input id="f-base" value="${BASE}"/>`);
+      $("#f-base").onchange=()=>{ BASE=$("#f-base").value.trim(); LS.setItem("gaaro_base",BASE); }; };
+    bindEnable(["f-user","f-pass"]);
+  }
+}
+function bindEnable(ids){
+  const go=$("#auth-go"); $("#auth-err").textContent="";
+  const check=()=>{ go.disabled = ids.some(i=>!($("#"+i)&&$("#"+i).value.trim())); };
+  ids.forEach(i=>{ const el=$("#"+i); if(el){ el.oninput=check; el.onkeydown=e=>{ if(e.key==="Enter"&&!go.disabled) go.onclick(); }; } });
+  check();
+}
+async function doSetup(){
+  const u=$("#f-user").value.trim(), p=$("#f-pass").value, p2=$("#f-pass2").value;
+  if(p!==p2) return fail("passwords don't match");
+  if(p.length<6) return fail("password needs at least 6 characters");
+  submitAuth("/auth/setup",{username:u,password:p});
+}
+async function doLogin(){ submitAuth("/auth/login",{username:$("#f-user").value.trim(),password:$("#f-pass").value}); }
+async function submitAuth(path,payload){
+  $("#auth-go").disabled=true; $("#auth-err").textContent="";
+  try{
+    const j=await (await api(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})).json();
+    if(j.ok&&j.token){ SESSION=j.token; LS.setItem("gaaro_session",SESSION); return enterApp(j.username); }
+    fail(j.error||"that didn't work");
+  }catch(e){ fail("couldn't reach your guard"); }
+}
+function fail(m){ $("#auth-err").textContent=m; $("#auth-go").disabled=false; }
+
+async function enterApp(name){
+  show("screen-app");
+  if(!name){ try{ name=(await (await api("/auth/status")).json()).username; }catch(e){} }
+  $("#who").textContent = name?`Signed in as ${name}`:"";
+  loadRoster(); loadQueue(); showPanel("live");
+}
+$("#signout").onclick=async()=>{
+  try{ await api("/auth/logout",{method:"POST",headers:hdrs(),body:JSON.stringify({token:SESSION})}); }catch(e){}
+  LS.removeItem("gaaro_session"); SESSION=""; stopCamera(); try{stopLive();}catch(e){} try{stopDoor();}catch(e){} show("screen-auth"); renderAuth();
+};
+
+// ===================== GUIDED FACE SCAN =====================
+// Tunables (adjust live for your camera/lighting).
+const MP_VER = "0.10.18";
+const MP_CDN = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@" + MP_VER;
+const MP_MODEL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+const YAW_STEP = 0.06, PITCH_STEP = 0.05;     // proxy units per angle bin
+const TARGET_CELLS = 9;                        // distinct angle cells = "all angles"
+const MAX_SHOTS = 14, MIN_CAPTURE_MS = 140, MIN_FACE = 0.12;
+const SHARP_GATE_FRAC = 0.6;          // capture only frames >= this fraction of the recent peak sharpness (blur gate)
+
+const video = $("#cam"), overlay = $("#overlay"), octx = overlay.getContext("2d");
+let landmarker=null, stream=null, running=false;
+let center=null, covered=new Set(), coveredDirs=new Set(), shots=[], lastCap=0, progress=0;
+let sharpRef=0, _sharpOK=false;        // adaptive sharpness reference (decaying peak) + per-frame focus gate
+const DIR_YAW=0.085, DIR_PITCH=0.06;   // thresholds (proxy units) for a named direction
+
+function scanMsg(m,c){ const e=$("#scanmsg"); e.className="msg "+(c||"mut"); e.textContent=m; }
+function hint(m){ $("#scanhint").textContent=m||""; }
+function stopCamera(){ running=false; try{ (stream&&stream.getTracks()||[]).forEach(t=>t.stop()); }catch(e){} stream=null; }
+function resetScanBtn(){ const b=$("#scan"); b.textContent="Scan face"; b.disabled=false; }
+
+$("#scan").onclick = startScan;
+$("#usemanual").onclick = ()=>fallbackManual("");
+
+async function startScan(){
+  const name=$("#name").value.trim();
+  if(!name){ scanMsg("Enter a name first","bad"); $("#name").focus(); return; }
+  $("#scan").disabled=true; scanMsg("Starting camera…","mut"); hint("");
+  try{
+    stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:640,height:480},audio:false});
+    video.srcObject=stream; await video.play();
+  }catch(e){ scanMsg("Camera unavailable — allow access (use localhost or HTTPS).","bad"); resetScanBtn(); return; }
+  overlay.width = video.videoWidth||640; overlay.height = video.videoHeight||480;
+  scanMsg("Loading face engine…","mut");
+  try{
+    const vision = await import(MP_CDN + "/vision_bundle.mjs");
+    const fileset = await vision.FilesetResolver.forVisionTasks(MP_CDN + "/wasm");
+    landmarker = await vision.FaceLandmarker.createFromOptions(fileset, {
+      baseOptions:{ modelAssetPath:MP_MODEL, delegate:"GPU" }, runningMode:"VIDEO", numFaces:1 });
+  }catch(e){
+    console.warn("face engine load failed:", e);
+    return fallbackManual("Auto-scan needs internet the first time. Switched to tap-to-capture.");
+  }
+  center=null; covered=new Set(); coveredDirs=new Set(); shots=[]; lastCap=0; progress=0; running=true; sharpRef=0; _sharpOK=false;
+  resetViews();
+  $("#coverage").classList.remove("hidden"); $("#checks").innerHTML=""; updateRadar();
+  $("#scan").textContent="Scanning…"; scanMsg("Slowly turn your head — left, right, up, down.","mut");
+  loop();
+}
+
+function proxies(lm){
+  const nose=lm[1], le=lm[33], re=lm[263], lc=lm[234], rc=lm[454], top=lm[10], chin=lm[152];
+  const fw=Math.hypot(rc.x-lc.x, rc.y-lc.y)||1e-6, fh=Math.hypot(chin.x-top.x, chin.y-top.y)||1e-6;
+  const cx=(lc.x+rc.x)/2, eyeY=(le.y+re.y)/2;
+  return { yaw:(nose.x-cx)/fw, pitch:(nose.y-eyeY)/fh, span:fw };
+}
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+function onFrame(lm){
+  const p=proxies(lm);
+  if(p.span < MIN_FACE){ hint("Move a little closer."); setCheck("center","warn","Move closer"); return; }
+  if(!center){ center={yaw:p.yaw,pitch:p.pitch}; }
+  const ry=p.yaw-center.yaw, rp=p.pitch-center.pitch, now=performance.now();
+  // sharpness/blur gate: only capture frames that are in focus (kills motion blur from head-turns)
+  const sharp=frameSharpness();
+  sharpRef=Math.max(sharp, sharpRef*0.985);           // decaying peak = the sharpness this camera/light can reach
+  _sharpOK = sharpRef>0 && sharp >= SHARP_GATE_FRAC*sharpRef;
+  // fine cells -> capture more angle samples (only when in focus)
+  const yb=clamp(Math.round(ry/YAW_STEP),-2,2), pb=clamp(Math.round(rp/PITCH_STEP),-1,1);
+  const cell=yb+","+pb;
+  if(!covered.has(cell) && now-lastCap>MIN_CAPTURE_MS && shots.length<MAX_SHOTS && _sharpOK){
+    covered.add(cell); lastCap=now; captureFrame();
+  }
+  // named directions -> head graphic + per-view thumbnail + progress + guidance
+  if(Math.abs(ry)<DIR_YAW*0.6 && Math.abs(rp)<DIR_PITCH*0.6) addDir("front");
+  if(ry<-DIR_YAW) addDir("left");
+  if(ry> DIR_YAW) addDir("right");
+  if(rp<-DIR_PITCH) addDir("up");
+  if(rp> DIR_PITCH) addDir("down");
+  progress=Math.min(1, coveredDirs.size/5);
+  updateRadar();
+  // quality: centred (cheap, from landmark centroid)
+  const cxn=lm.reduce((s,q)=>s+(1-q.x),0)/lm.length;
+  setCheck("center", Math.abs(cxn-0.5)<0.22?"yes":"warn", Math.abs(cxn-0.5)<0.22?"Face centred":"Centre your face");
+  setCheck("sharp", _sharpOK?"yes":"warn", _sharpOK?"In focus":"Hold steady");
+  const missing=["front","left","right","up","down"].filter(d=>!coveredDirs.has(d));
+  if(!_sharpOK && progress<1) hint("Hold steady — keeping the shot sharp");
+  else hint(progress>=1 ? "All views captured." : (missing.length?promptFor(missing[0]):""));
+}
+function promptFor(d){ return {front:"Look straight ahead",left:"Turn your head left",right:"Turn your head right",up:"Tilt your head up",down:"Tilt your head down"}[d]||"Keep turning slowly"; }
+function updateRadar(){
+  for(const d of ["up","down","left","right"]){ const a=$("#arc-"+d), l=$("#lbl-"+d), on=coveredDirs.has(d); if(a)a.classList.toggle("on",on); if(l)l.classList.toggle("on",on); }
+  const head=$("#head-front"); if(head) head.classList.toggle("on", coveredDirs.has("front"));
+  const pc=Math.round(progress*100)+"%";
+  const p1=$("#cov-pct"); if(p1)p1.textContent=pc;
+  const p2=$("#cov-pct-svg"); if(p2)p2.textContent=pc;
+  const ct=$("#coachtext"); if(ct) ct.textContent = progress>=1 ? "All angles captured ✓" : (coveredDirs.size ? "Looking good — keep turning" : "Look straight ahead to begin");
+}
+function addDir(d){ if(!_sharpOK) return; if(!coveredDirs.has(d)){ coveredDirs.add(d); captureViewThumb(d); } }
+function captureViewThumb(d){
+  try{
+    const c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight;
+    c.getContext("2d").drawImage(video,0,0,c.width,c.height);
+    const data=c.toDataURL("image/jpeg",0.85);
+    const t=$("#v-"+d); if(t){ t.style.backgroundImage=`url(${data})`; t.classList.add("on"); }
+    const v=$("#view-"+d); if(v) v.classList.add("on");
+    shots.push(data);                 // a guaranteed enrollment frame for this view
+  }catch(e){}
+}
+function resetViews(){
+  for(const d of ["front","left","right","up","down"]){
+    const t=$("#v-"+d); if(t){ t.style.backgroundImage=""; t.classList.remove("on"); }
+    const v=$("#view-"+d); if(v) v.classList.remove("on");
+  }
+}
+function setCheck(key, cls, text){
+  let el=$("#chk-"+key);
+  if(!el){ el=document.createElement("div"); el.id="chk-"+key; $("#checks").appendChild(el); }
+  el.className=cls; el.textContent=(cls==="yes"?"✓ ":cls==="warn"?"⚠ ":"• ")+text;
+}
+
+function draw(lm){
+  const W=overlay.width, H=overlay.height; octx.clearRect(0,0,W,H);
+  let cxn=0,cyn=0; for(const q of lm){ cxn+=(1-q.x); cyn+=q.y; } cxn/=lm.length; cyn/=lm.length;
+  let maxd=1e-6; const pts=[];
+  for(const q of lm){ const d=Math.hypot((1-q.x)-cxn,(q.y)-cyn); if(d>maxd)maxd=d; pts.push([(1-q.x)*W,q.y*H,d]); }
+  for(const [x,y,d] of pts){
+    const on=(d/maxd)<=progress;
+    octx.beginPath(); octx.arc(x,y,on?2.4:1.5,0,7);
+    octx.fillStyle = on ? "rgba(52,211,153,.95)" : "rgba(150,205,235,.30)"; octx.fill();
+  }
+  // progress ring (top-right) + %
+  const r=22, px=W-r-14, py=r+14;
+  octx.beginPath(); octx.arc(px,py,r,0,7); octx.lineWidth=4; octx.strokeStyle="rgba(255,255,255,.12)"; octx.stroke();
+  octx.beginPath(); octx.arc(px,py,r,-Math.PI/2,-Math.PI/2+progress*2*Math.PI); octx.lineWidth=4; octx.strokeStyle="rgba(52,211,153,.95)"; octx.stroke();
+  octx.fillStyle="#eef3f8"; octx.font="600 13px system-ui"; octx.textAlign="center"; octx.textBaseline="middle";
+  octx.fillText(Math.round(progress*100)+"%", px, py);
+}
+
+function drawComplete(){
+  const W=overlay.width,H=overlay.height; octx.clearRect(0,0,W,H);
+  octx.fillStyle="rgba(52,211,153,.18)"; octx.fillRect(0,0,W,H);
+  octx.strokeStyle="rgba(52,211,153,.95)"; octx.lineWidth=6; octx.lineCap="round";
+  octx.beginPath(); octx.moveTo(W/2-26,H/2); octx.lineTo(W/2-6,H/2+20); octx.lineTo(W/2+30,H/2-22); octx.stroke();
+}
+
+let _sharpCv=null, _sharpCx=null;
+function frameSharpness(){
+  // Variance of the Laplacian on a small grayscale sample = a focus measure (low value = blurry).
+  // Used to reject motion-blurred frames during head-turns before they're captured.
+  try{
+    if(!_sharpCv){ _sharpCv=document.createElement("canvas"); _sharpCv.width=128; _sharpCv.height=96; _sharpCx=_sharpCv.getContext("2d",{willReadFrequently:true}); }
+    const W=128,H=96; _sharpCx.drawImage(video,0,0,W,H);
+    const d=_sharpCx.getImageData(0,0,W,H).data, g=new Float32Array(W*H);
+    for(let i=0,p=0;i<d.length;i+=4,p++) g[p]=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
+    let sum=0,sum2=0,n=0;
+    for(let y=1;y<H-1;y++) for(let x=1;x<W-1;x++){ const o=y*W+x;
+      const lap=4*g[o]-g[o-1]-g[o+1]-g[o-W]-g[o+W]; sum+=lap; sum2+=lap*lap; n++; }
+    const mean=sum/n; return sum2/n - mean*mean;
+  }catch(e){ return 0; }
+}
+function captureFrame(){
+  const c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight;
+  c.getContext("2d").drawImage(video,0,0,c.width,c.height);
+  const data=c.toDataURL("image/jpeg",0.85); shots.push(data);
+  try{   // cheap lighting check on a downscaled sample
+    const s=document.createElement("canvas"); s.width=32; s.height=24;
+    const sx=s.getContext("2d"); sx.drawImage(c,0,0,32,24);
+    const px=sx.getImageData(0,0,32,24).data; let sum=0;
+    for(let i=0;i<px.length;i+=4) sum+=(px[i]+px[i+1]+px[i+2])/3;
+    const bright=sum/(32*24);
+    setCheck("light", bright>60?"yes":"warn", bright>60?"Lighting good":"Too dark — add light");
+  }catch(e){}
+}
+
+function loop(){
+  if(!running) return;
+  if(video.readyState>=2 && landmarker){
+    let res; try{ res=landmarker.detectForVideo(video, performance.now()); }catch(e){ res=null; }
+    if(res && res.faceLandmarks && res.faceLandmarks.length){
+      const lm=res.faceLandmarks[0]; onFrame(lm); draw(lm);
+      if(progress>=1){ return finishScan(); }
+    } else { octx.clearRect(0,0,overlay.width,overlay.height); hint("Center your face in the frame."); }
+  }
+  requestAnimationFrame(loop);
+}
+
+async function finishScan(){
+  running=false; drawComplete();           // keep the camera on for the live verification
+  const name=$("#name").value.trim();
+  $("#scan").textContent="Saving…"; scanMsg("Profile complete — saving to your guard…","ok");
+  let secs=0;
+  const tick=setInterval(()=>{ secs+=2;
+    if(secs===8) scanMsg("Still saving… first save loads the face model on the guard (one time). Watch the guard window.","mut");
+    else if(secs===45) scanMsg("Still on the first-time model load. Once done, saves are instant.","mut");
+  },2000);
+  let saved=false;
+  try{
+    const j=await (await api("/enroll",{method:"POST",headers:hdrs(),body:JSON.stringify({label:name, source:"app_livescan", images:shots})})).json();
+    clearInterval(tick);
+    if(j.ok){ saved=true; loadRoster(); }
+    else scanMsg(j.error||"No clear face captured — try again in better light.","bad");
+  }catch(e){ clearInterval(tick); scanMsg("Couldn't reach your guard.","bad"); }
+  if(saved) await proveIt(name);
+  stopCamera(); $("#name").value="";
+  setTimeout(()=>{ octx.clearRect(0,0,overlay.width,overlay.height); }, 1600);
+  resetScanBtn();
+}
+
+async function proveIt(name){
+  scanMsg(`Saved ${name}. Checking the guard recognizes you…`,"mut");
+  try{
+    const c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight;
+    c.getContext("2d").drawImage(video,0,0,c.width,c.height);
+    const frame=c.toDataURL("image/jpeg",0.85);
+    const j=await (await api("/recognize",{method:"POST",headers:hdrs(),body:JSON.stringify({image:frame})})).json();
+    const faces=j.faces||[];
+    const me=faces.find(f=>f.name===name) || faces.find(f=>f.name!=="unknown") || faces[0];
+    if(me && me.name===name) scanMsg(`✓ The guard recognizes you as ${name} — ${Math.round(me.confidence*100)}% confident.`,"ok");
+    else if(me && me.name && me.name!=="unknown") scanMsg(`Saved. Closest live match was ${me.name} — worth re-checking enrollment.`,"warn");
+    else scanMsg(`Saved ${name}. The guard didn't lock on to this live frame yet — try the Live view below.`,"mut");
+  }catch(e){ scanMsg(`Saved ${name}. (Couldn't run the live check.)`,"mut"); }
+}
+
+// ---- manual fallback (proven path) ----
+function fallbackManual(why){
+  running=false; stopCamera();
+  $("#scanwrap").classList.add("hidden"); $("#scan").classList.add("hidden"); $("#usemanual").classList.add("hidden");
+  $("#manual").classList.remove("hidden");
+  if(why) scanMsg(why,"mut");
+}
+let mshots=[];
+$("#startcam").onclick=async()=>{
+  try{ const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});
+    // reuse the same video element
+    $("#scanwrap").classList.remove("hidden"); video.srcObject=s; stream=s; await video.play();
+    $("#shot").disabled=false; $("#startcam").disabled=true; octx.clearRect(0,0,overlay.width,overlay.height);
+  }catch(e){ alert("Camera unavailable. Use localhost or HTTPS and allow access."); }
+};
+$("#shot").onclick=()=>{
+  const c=document.createElement("canvas"); c.width=video.videoWidth; c.height=video.videoHeight;
+  c.getContext("2d").drawImage(video,0,0,c.width,c.height);
+  const d=c.toDataURL("image/jpeg",0.85); mshots.push(d);
+  const img=document.createElement("img"); img.src=d; $("#shots").appendChild(img);
+  $("#count").textContent=mshots.length+" captured"; $("#enroll").disabled=mshots.length===0;
+};
+$("#enroll").onclick=async()=>{
+  const name=$("#name").value.trim();
+  if(!name){ $("#emsg").className="msg bad"; $("#emsg").textContent="enter a name first"; return; }
+  $("#enroll").disabled=true; $("#emsg").className="msg mut"; $("#emsg").textContent="adding…";
+  try{
+    const j=await (await api("/enroll",{method:"POST",headers:hdrs(),body:JSON.stringify({label:name,source:"app_livescan",images:mshots})})).json();
+    if(j.ok){ $("#emsg").className="msg ok"; $("#emsg").textContent=`added ${name} — ${j.enrolled} good frame(s)`;
+      mshots=[]; $("#shots").innerHTML=""; $("#count").textContent="0 captured"; $("#name").value=""; stopCamera(); loadRoster(); }
+    else { $("#emsg").className="msg bad"; $("#emsg").textContent=j.error||"no clear face — better light, face the camera"; }
+  }catch(e){ $("#emsg").className="msg bad"; $("#emsg").textContent="couldn't reach your guard"; }
+  $("#enroll").disabled=false;
+};
+
+// ---- queue + roster ----
+async function loadRoster(){
+  try{
+    const j=await (await api("/roster",{headers:hdrs()})).json();
+    const box=$("#roster"); box.innerHTML="";
+    if(!j.roster||!j.roster.length){ box.innerHTML='<p class="msg mut">No one added yet.</p>'; return; }
+    for(const p of j.roster){ const s=p.sources||{};
+      const d=document.createElement("div"); d.className="person";
+      d.innerHTML=`<div><b>${p.label}</b> <small>· ${(s.app_livescan||0)+(s.owner_tagged||0)} added, ${s.auto_camera||0} learned</small></div><button class="bad">Remove</button>`;
+      d.querySelector("button").onclick=async()=>{
+        if(!confirm(`Remove ${p.label} and all their face data?`)) return;
+        try{ if((await (await api("/enrollment/remove",{method:"POST",headers:hdrs(),body:JSON.stringify({label:p.label,scope:"all"})})).json()).ok) loadRoster(); else alert("Couldn't remove."); }
+        catch(e){ alert("Removal failed."); }
+      };
+      box.appendChild(d);
+    }
+  }catch(e){ $("#roster").innerHTML='<p class="msg bad">couldn\'t load</p>'; }
+}
+async function loadQueue(){
+  try{
+    const j=await (await api("/enrollment/queue",{headers:hdrs()})).json();
+    const box=$("#queue"); box.innerHTML="";
+    if(!j.pending||!j.pending.length){ box.innerHTML='<p class="msg mut">Nothing waiting.</p>'; return; }
+    for(const c of j.pending){
+      const d=document.createElement("div"); d.className="cand";
+      const src=c.has_crop?`${BASE.replace(/\/$/,"")}/enrollment/crop?id=${c.id}&token=${encodeURIComponent(SESSION)}`:"";
+      d.innerHTML=`<img src="${src}" alt="face"/><div style="flex:1"><div>Is this <b>${c.suggested}</b>? <span class="pill">match ${c.similarity}</span> <span class="pill">${c.sightings}×</span></div></div><button class="ok">Yes</button><button class="bad">No</button>`;
+      d.querySelectorAll("button")[0].onclick=async()=>{ await api("/enrollment/confirm",{method:"POST",headers:hdrs(),body:JSON.stringify({id:c.id,label:c.suggested})}); loadQueue(); loadRoster(); };
+      d.querySelectorAll("button")[1].onclick=async()=>{ await api("/enrollment/reject",{method:"POST",headers:hdrs(),body:JSON.stringify({id:c.id})}); loadQueue(); };
+      box.appendChild(d);
+    }
+  }catch(e){ $("#queue").innerHTML='<p class="msg bad">couldn\'t load</p>'; }
+}
+// ===================== LIVE RECOGNITION (the guard's eye) =====================
+let liveStream=null, liveTimer=null, liveBusy=false;
+const livecam=$("#livecam"), liveov=$("#liveoverlay"), lctx=liveov.getContext("2d");
+$("#livestart").onclick=async()=>{
+  try{
+    liveStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:640,height:480},audio:false});
+    livecam.srcObject=liveStream; await livecam.play();
+    liveov.width=livecam.videoWidth||640; liveov.height=livecam.videoHeight||480;
+    $("#livestart").classList.add("hidden"); $("#livestop").classList.remove("hidden");
+    $("#decision").classList.remove("hidden"); $("#decision").className="decision"; $("#decision").textContent="Guard: starting…";
+    liveTimer=setInterval(liveTick,1200); liveTick();
+  }catch(e){ alert("Camera unavailable. Use localhost or HTTPS and allow access."); }
+};
+$("#livestop").onclick=stopLive;
+function stopLive(){
+  if(liveTimer){ clearInterval(liveTimer); liveTimer=null; }
+  try{ (liveStream&&liveStream.getTracks()||[]).forEach(t=>t.stop()); }catch(e){}
+  liveStream=null; lctx.clearRect(0,0,liveov.width,liveov.height);
+  $("#livestart").classList.remove("hidden"); $("#livestop").classList.add("hidden"); $("#decision").classList.add("hidden");
+}
+async function liveTick(){
+  if(liveBusy || !liveStream) return; liveBusy=true;
+  try{
+    const c=document.createElement("canvas"); c.width=livecam.videoWidth; c.height=livecam.videoHeight;
+    c.getContext("2d").drawImage(livecam,0,0,c.width,c.height);
+    const j=await (await api("/recognize",{method:"POST",headers:hdrs(),body:JSON.stringify({image:c.toDataURL("image/jpeg",0.8)})})).json();
+    drawLive(j.faces||[]);
+    const dec=$("#decision"), isAlert=(j.decision||"").includes("alert");
+    dec.className="decision "+(isAlert?"alert":((j.faces||[]).length?"quiet":"")); dec.textContent="Guard: "+(j.decision||"—");
+  }catch(e){}
+  liveBusy=false;
+}
+function drawLive(faces){
+  const W=liveov.width,H=liveov.height; lctx.clearRect(0,0,W,H);
+  for(const f of faces){
+    const known=f.name!=="unknown", col=known?"#34d399":"#f4636b";
+    const x1=(1-f.bbox[2])*W, y1=f.bbox[1]*H, x2=(1-f.bbox[0])*W, y2=f.bbox[3]*H;  // mirror to match the video
+    lctx.strokeStyle=col; lctx.lineWidth=3; lctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    const label=known?`${f.name} ${Math.round(f.confidence*100)}%`:"Unknown";
+    lctx.font="600 15px system-ui"; const tw=lctx.measureText(label).width;
+    lctx.fillStyle=col; lctx.fillRect(x1,Math.max(0,y1-22),tw+12,22);
+    lctx.fillStyle="#04140d"; lctx.textBaseline="middle"; lctx.fillText(label,x1+6,Math.max(11,y1-11));
+  }
+}
+
+// ===================== AT THE DOOR (FD camera) =====================
+let doorTimer=null, doorBusy=false;
+const doorimg=$("#doorimg"), dooroverlay=$("#dooroverlay"), dctx=dooroverlay.getContext("2d");
+$("#doorstart").onclick=()=>{
+  $("#doorstart").classList.add("hidden"); $("#doorstop").classList.remove("hidden");
+  $("#doordecision").classList.remove("hidden"); $("#doordecision").className="decision"; $("#doordecision").textContent="Guard: connecting to the door camera…";
+  doorTimer=setInterval(doorTick,1200); doorTick();
+};
+$("#doorstop").onclick=stopDoor;
+function stopDoor(){
+  if(doorTimer){ clearInterval(doorTimer); doorTimer=null; }
+  dctx.clearRect(0,0,dooroverlay.width,dooroverlay.height);
+  $("#doorstart").classList.remove("hidden"); $("#doorstop").classList.add("hidden"); $("#doordecision").classList.add("hidden");
+}
+async function doorTick(){
+  if(doorBusy) return; doorBusy=true;
+  try{
+    const j=await (await api("/door/recognize",{headers:hdrs()})).json();
+    const dec=$("#doordecision");
+    if(!j.has_frame){ dec.className="decision"; dec.textContent="Guard: no door-camera frame — is the guard running with GAARO_CAMERA set?"; doorBusy=false; return; }
+    if(j.image) doorimg.src=j.image;
+    drawDoor(j.faces||[]);
+    const isAlert=(j.decision||"").includes("alert");
+    dec.className="decision "+(isAlert?"alert":((j.faces||[]).length?"quiet":"")); dec.textContent="Guard: "+(j.decision||"—");
+  }catch(e){}
+  doorBusy=false;
+}
+function drawDoor(faces){
+  dooroverlay.width=doorimg.clientWidth||640; dooroverlay.height=doorimg.clientHeight||360;
+  const W=dooroverlay.width,H=dooroverlay.height; dctx.clearRect(0,0,W,H);
+  for(const f of faces){
+    const known=f.name!=="unknown", col=known?"#34d399":"#f4636b";
+    const x1=f.bbox[0]*W, y1=f.bbox[1]*H, x2=f.bbox[2]*W, y2=f.bbox[3]*H;   // real camera — not mirrored
+    dctx.strokeStyle=col; dctx.lineWidth=3; dctx.strokeRect(x1,y1,x2-x1,y2-y1);
+    const label=known?`${f.name} ${Math.round(f.confidence*100)}%`:"Unknown";
+    dctx.font="600 14px system-ui"; const tw=dctx.measureText(label).width;
+    dctx.fillStyle=col; dctx.fillRect(x1,Math.max(0,y1-20),tw+10,20);
+    dctx.fillStyle="#04140d"; dctx.textBaseline="middle"; dctx.fillText(label,x1+5,Math.max(10,y1-10));
+  }
+}
+
+// ===================== REMOTE (CLOUD PAIRING) =====================
+// The SENA Supabase project (public values; the publishable key is safe to ship in the client).
+const SUPA_URL = "https://qbwbjcqgyaafpofumcho.supabase.co";
+const SUPA_KEY = "sb_publishable_AowxTEZ3NmC_64qb5IapVA_k6G3oURp";
+
+async function supaFetch(path, opts={}, bearer=null){
+  const h = Object.assign({ "apikey": SUPA_KEY, "Content-Type": "application/json" }, opts.headers||{});
+  if(bearer) h["Authorization"] = "Bearer " + bearer;
+  return fetch(SUPA_URL + path, Object.assign({}, opts, { headers: h }));
+}
+async function _randHex(n){ const a=new Uint8Array(n); crypto.getRandomValues(a);
+  return [...a].map(b=>b.toString(16).padStart(2,"0")).join(""); }
+async function _sha256hex(s){ const d=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return [...new Uint8Array(d)].map(b=>b.toString(16).padStart(2,"0")).join(""); }
+
+// ---- OUTBOUND cloud relay (POC-2 remote access) -----------------------------------------------
+// Away from the guard's Wi-Fi, SAFE operations route through Supabase: the app (signed in as the
+// OWNER) enqueues a command for THIS device; the guard's outbound bridge picks it up, runs it
+// locally, and posts the result back. This mirrors the guard-side ALLOWED_REMOTE firewall EXACTLY —
+// biometric/video routes are not relayable. The guard injects its OWN local token when it relays, so
+// the enqueued command carries no guard credential.
+const REMOTE_ALLOWED = [
+  ["GET","/status"], ["GET","/health"], ["GET","/recognition/events"],
+  ["POST","/recognition/delete"], ["POST","/recognition/clear"],
+  ["GET","/roster"], ["GET","/enrollment/queue"],
+  ["POST","/enrollment/confirm"], ["POST","/enrollment/reject"], ["POST","/enrollment/remove"],
+];
+function remoteAllowed(method, path){
+  const m=(method||"GET").toUpperCase(), p=(path||"").split("?")[0];
+  return REMOTE_ALLOWED.some(([am,ap])=>am===m && ap===p);
+}
+function remoteCreds(){ try{ return JSON.parse(LS.getItem("gaaro_remote")||"null"); }catch(e){ return null; } }
+
+async function _supaToken(creds){
+  // Best-effort refresh of the owner's cloud session; returns a usable access_token.
+  try{
+    const r=await supaFetch("/auth/v1/token?grant_type=refresh_token",{method:"POST",
+      body:JSON.stringify({refresh_token:creds.refresh_token})});
+    if(r.ok){ const j=await r.json();
+      if(j.access_token){ creds.access_token=j.access_token;
+        creds.refresh_token=j.refresh_token||creds.refresh_token;
+        LS.setItem("gaaro_remote", JSON.stringify(creds)); return j.access_token; } }
+  }catch(e){}
+  return creds.access_token;     // stored token may still be valid
+}
+
+function _shim(status, body){      // a minimal stand-in for a fetch Response, for api() callers
+  return { ok: status>=200 && status<300, status,
+           json: async()=>body, text: async()=>JSON.stringify(body) };
+}
+
+async function _enqueue(creds, jwt, method, path, body){
+  return supaFetch("/rest/v1/device_commands",{method:"POST",
+    headers:{"Prefer":"return=representation"},
+    body:JSON.stringify({device_id:creds.device_id, owner_id:creds.owner_id,
+      payload:{method, path, body}})}, jwt);
+}
+
+async function apiRemote(path, opts={}){
+  const creds=remoteCreds();
+  if(!creds || !creds.device_id) throw new Error("this guard isn't paired for remote access");
+  const method=(opts.method||"GET").toUpperCase();
+  if(!remoteAllowed(method, path)) return _shim(403, {error:"not available remotely"});
+  let jwt=await _supaToken(creds);
+  const body = opts.body ? JSON.parse(opts.body) : null;
+  let enq=await _enqueue(creds, jwt, method, path, body);
+  if(enq.status===401){ jwt=await _supaToken(creds); enq=await _enqueue(creds, jwt, method, path, body); }
+  if(!enq.ok){ const e=await enq.json().catch(()=>({})); throw new Error(e.message||"couldn't reach your guard remotely"); }
+  const cid=((await enq.json())[0]||{}).id;
+  if(!cid) throw new Error("command was not accepted");
+  for(let i=0;i<24;i++){               // the guard polls every ~2s; allow ~24s
+    await new Promise(r=>setTimeout(r,1000));
+    const rr=await supaFetch(`/rest/v1/device_results?command_id=eq.${cid}&select=status_code,body`, {}, jwt);
+    if(rr.ok){ const rows=await rr.json(); if(rows && rows.length){
+      return _shim(rows[0].status_code||0, rows[0].body); } }
+  }
+  return _shim(504, {error:"your guard didn't answer — it may be offline"});
+}
+
+async function loadPairState(){
+  const box=$("#pairstate"), form=$("#pairform");
+  let st;
+  try{ st = await (await api("/pair/status",{headers:hdrs()})).json(); }
+  catch(e){ box.innerHTML='<p class="msg bad">Couldn\'t reach the guard.</p>'; return; }
+  if(st.paired){
+    box.innerHTML=`<p class="msg yes">✓ This guard is paired to your account.</p>
+      <p class="sub" style="margin-top:6px">Device: <code>${esc(st.device_id||'—')}</code></p>
+      <button id="unpair" class="ghost" style="margin-top:8px">Unpair this guard</button>`;
+    form.classList.add("hidden");
+    $("#unpair").onclick=async()=>{
+      if(!confirm("Unpair this guard from the cloud? It stays fully working on your local network.")) return;
+      await api("/pair/unpair",{method:"POST",headers:hdrs(),body:JSON.stringify({})});
+      LS.removeItem("gaaro_remote"); loadPairState();
+    };
+  } else {
+    box.innerHTML='<p class="msg mut">This guard is local-only — not yet reachable from outside your Wi-Fi.</p>';
+    form.classList.remove("hidden");
+  }
+}
+
+(function wirePair(){
+  const btn=$("#pair-go"); if(!btn) return;
+  btn.onclick=async()=>{
+    const email=$("#pair-email").value.trim(), pass=$("#pair-pass").value;
+    const name=$("#pair-name").value.trim()||"My Guard", msg=$("#pair-msg");
+    if(!email||!pass){ msg.textContent="Enter your email and password."; msg.className="msg bad"; return; }
+    btn.disabled=true;
+    try{
+      // 1) sign in to the cloud account
+      msg.textContent="Signing in…"; msg.className="msg mut";
+      const ar=await supaFetch("/auth/v1/token?grant_type=password",{method:"POST",
+        body:JSON.stringify({email, password:pass})});
+      const auth=await ar.json();
+      if(!auth.access_token) throw new Error(auth.error_description||auth.msg||"sign-in failed");
+      const ownerJwt=auth.access_token, ownerId=auth.user&&auth.user.id;
+      // 2) provision a device record (a secret the guard will hold; only its hash is stored in the cloud)
+      msg.textContent="Provisioning…";
+      const token=await _randHex(32), secretHash=await _sha256hex(token);
+      const dr=await supaFetch("/rest/v1/devices",{method:"POST",
+        headers:{"Prefer":"return=representation"},
+        body:JSON.stringify({owner_id:ownerId, name, secret_hash:secretHash})}, ownerJwt);
+      if(!dr.ok){ const e=await dr.json().catch(()=>({})); throw new Error(e.message||"could not create device"); }
+      const deviceId=((await dr.json())[0]||{}).id;
+      // 3) hand the guard its token over the LAN (the guard never accepts this from outside)
+      msg.textContent="Pairing the guard…";
+      const cr=await (await api("/pair/claim",{method:"POST",headers:hdrs(),
+        body:JSON.stringify({owner_id:ownerId, supabase_url:SUPA_URL, device_token:token, anon_key:SUPA_KEY})})).json();
+      if(!cr.ok) throw new Error(cr.error||"the guard rejected the claim");
+      // 4) remember what away-from-home routing needs: the device + the owner's cloud session
+      LS.setItem("gaaro_remote", JSON.stringify({device_id:deviceId, owner_id:ownerId,
+        access_token:auth.access_token, refresh_token:auth.refresh_token}));
+      msg.textContent="Paired ✓ — your guard can now reach you remotely."; msg.className="msg yes";
+      setTimeout(loadPairState,800);
+    }catch(e){
+      msg.textContent=String(e.message||e); msg.className="msg bad";
+    }finally{ btn.disabled=false; }
+  };
+})();
+
+// ===================== STANDING ORDERS (PROTOCOLS) =====================
+const SEV = {T0:"Silent — log only", T1:"Info — in the app", T2:"Notify — push", T3:"Call you", T4:"Call everyone"};
+const ACT = {
+  announce_inside:"Announce inside", greet_visitor:"Greet the visitor", wait:"Wait",
+  call_owner:"Call you", ask_visitor:"Ask the visitor", call_contact:"Call a contact",
+  notify_app:"Notify the app", push:"Send a push", raise_alert:"Sound the safety alert", log:"Log it"
+};
+const POC2 = new Set(["greet_visitor","ask_visitor","call_owner","call_contact","push"]);
+
+function trigPart(t){
+  if(!t) return "—";
+  if(t.all) return t.all.map(trigPart).join(" and ");
+  if(t.any) return t.any.map(trigPart).join(" or ");
+  const c=t.condition;
+  if(c==="geometry.zone_dwell") return `someone waits at "${t.zone||"a zone"}" for ${t.min_dwell_s||0}s`;
+  if(c==="geometry.in_zone") return `someone is at "${t.zone||"a zone"}"`;
+  if(c==="identity.is_unknown") return "the person is unknown";
+  if(c==="identity.is_known") return "the person is known";
+  if(c==="identity.is") return `the person is ${t.name}`;
+  if(c==="context.time_between") return `the time is between ${t.from} and ${t.to}`;
+  if(c==="context.valid_until") return `before ${t.until}`;
+  if(c==="context.repeat_visitor") return `a repeat visitor (seen ≥${t.min_count||2}×)`;
+  if(c==="intent.purpose") return `their purpose is "${t.purpose}"`;
+  if(c==="intent.affiliation") return `they are from "${t.of}"`;
+  if(c==="sealed.safety_event") return "a safety event occurs";
+  return c||"a condition";
+}
+function esc(s){ return (s==null?"":String(s)).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+
+async function loadProtocols(){
+  const box=$("#protocols");
+  let j;
+  try{ j=await (await api("/protocols",{headers:hdrs()})).json(); }
+  catch(e){ box.innerHTML='<p class="msg bad">Couldn\'t reach the guard.</p>'; return; }
+  if(!j.enabled){ box.innerHTML='<p class="msg mut">The protocol engine is turned off on this guard.</p>'; renderRuns([]); return; }
+  box.innerHTML="";
+  for(const p of (j.protocols||[])) box.appendChild(protoCard(p));
+  renderRuns(j.recent_runs||[]);
+}
+
+function protoCard(p){
+  const sealed = p.class==="system_immutable";
+  const wrap=document.createElement("div"); wrap.className="pcard"+(sealed?" sealed":"");
+  let html=`<div class="row" style="justify-content:space-between; align-items:center">
+      <div><strong>${esc(p.name||p.id)}</strong> ${sealed
+        ? '<span class="pill lock">🔒 sealed · always on</span>'
+        : `<span class="pill">${esc(p.class)}</span>`}</div>
+      ${sealed?"":`<button class="${p.enabled?'ok':'ghost'}" data-act="toggle" style="min-width:62px">${p.enabled?'On':'Off'}</button>`}
+    </div>
+    <p class="sub" style="margin:8px 0 2px">When: ${trigPart(p.trigger)}.</p>`;
+  if(sealed){
+    html+=`<p class="note" style="margin-top:6px">${esc(p.note||"")}</p>`;
+  }else{
+    html+=`<label style="margin-top:8px">Notify level</label>
+      <select data-sev>${Object.entries(SEV).map(([k,v])=>`<option value="${k}" ${p.severity===k?'selected':''}>${v}</option>`).join("")}</select>
+      <label style="margin-top:10px">Steps the guard follows</label><div class="psteps">`;
+    (p.steps||[]).forEach((s,si)=>{
+      html+=`<div class="pstep"><div class="pstep-h">${si+1}. ${ACT[s.action]||esc(s.action)} ${POC2.has(s.action)?'<span class="pill">coming in POC-2</span>':''}</div>`;
+      const ps=s.params||{};
+      for(const key of Object.keys(ps)){
+        if(key==="_name") continue;
+        const val=ps[key];
+        if(key==="seconds") html+=`<div class="prow"><span class="k">${key}</span><input type="number" min="0" data-step="${esc(s.id)}" data-key="${key}" value="${esc(val)}"/></div>`;
+        else if(typeof val==="boolean") html+=`<div class="prow"><span class="k">${key}</span><input type="checkbox" data-step="${esc(s.id)}" data-key="${key}" ${val?"checked":""} style="width:auto; flex:none"/></div>`;
+        else if(key==="severity") html+=`<div class="prow"><span class="k">${key}</span><select data-step="${esc(s.id)}" data-key="${key}">${Object.keys(SEV).map(k=>`<option ${val===k?"selected":""}>${k}</option>`).join("")}</select></div>`;
+        else html+=`<div class="prow"><span class="k">${key}</span><input data-step="${esc(s.id)}" data-key="${key}" value="${esc(val)}"/></div>`;
+      }
+      html+=`</div>`;
+    });
+    html+=`</div><div class="row" style="margin-top:11px"><button class="ok" data-act="save">Save changes</button>
+      ${p.class==="custom"?'<button class="ghost" data-act="remove">Remove</button>':''}
+      <span class="msg mut" data-msg></span></div>`;
+  }
+  wrap.innerHTML=html;
+  if(!sealed) wireCard(wrap,p);
+  return wrap;
+}
+
+function wireCard(wrap,p){
+  const msg=wrap.querySelector("[data-msg]");
+  const tBtn=wrap.querySelector('[data-act="toggle"]');
+  if(tBtn) tBtn.onclick=async()=>{
+    const r=await (await api("/protocols/enable",{method:"POST",headers:hdrs(),body:JSON.stringify({id:p.id,enabled:!p.enabled})})).json();
+    if(r.ok) loadProtocols();
+  };
+  const sBtn=wrap.querySelector('[data-act="save"]');
+  if(sBtn) sBtn.onclick=async()=>{
+    const edited=JSON.parse(JSON.stringify(p));
+    const sevSel=wrap.querySelector("[data-sev]"); if(sevSel) edited.severity=sevSel.value;
+    wrap.querySelectorAll("[data-step]").forEach(inp=>{
+      const st=(edited.steps||[]).find(x=>x.id===inp.dataset.step); if(!st) return;
+      st.params=st.params||{}; const key=inp.dataset.key;
+      if(inp.type==="number") st.params[key]=Number(inp.value);
+      else if(inp.type==="checkbox") st.params[key]=inp.checked;
+      else st.params[key]=inp.value;
+    });
+    msg.textContent="Saving…"; msg.className="msg mut";
+    const r=await (await api("/protocols/save",{method:"POST",headers:hdrs(),body:JSON.stringify({protocol:edited})})).json();
+    if(r.ok){ msg.textContent="Saved ✓"; msg.className="msg yes"; setTimeout(loadProtocols,650); }
+    else { msg.textContent=(r.problems&&r.problems[0])||"Couldn't save"; msg.className="msg bad"; }
+  };
+  const rBtn=wrap.querySelector('[data-act="remove"]');
+  if(rBtn) rBtn.onclick=async()=>{
+    if(!confirm("Remove this procedure?")) return;
+    const r=await (await api("/protocols/remove",{method:"POST",headers:hdrs(),body:JSON.stringify({id:p.id})})).json();
+    if(r.ok) loadProtocols();
+  };
+}
+
+function renderRuns(runs){
+  const box=$("#proto-runs"); if(!box) return;
+  if(!runs||!runs.length){ box.innerHTML='<p class="msg mut">No procedure has run yet.</p>'; return; }
+  box.innerHTML="";
+  for(const r of runs){
+    const steps=(r.log||[]).map(e=>`${ACT[e.action]||e.action}${(e.outcome&&e.outcome!=="done")?` → ${e.outcome}`:""}`).join(" · ");
+    const at=r.at?fmtTime(new Date(r.at*1000).toISOString()):"";
+    const row=document.createElement("div"); row.className="evrow";
+    row.innerHTML=`<div class="evmeta"><div class="evname">${esc(r.protocol)}</div><div class="evsub">${at} • ${esc(steps)}</div></div>`;
+    box.appendChild(row);
+  }
+}
+
+$("#proto-reset").onclick=async()=>{
+  if(!confirm("Reset all procedures to the defaults? Your tuned values will be lost.")) return;
+  await api("/protocols/reset",{method:"POST",headers:hdrs(),body:JSON.stringify({})}); loadProtocols();
+};
+
+// ===================== TABS =====================
+function activePanel(){ const t=document.querySelector(".tab.on"); return t?t.dataset.panel:"live"; }
+function showPanel(name){
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on", b.dataset.panel===name));
+  document.querySelectorAll("section.card[data-tab]").forEach(s=>s.classList.toggle("hidden", s.dataset.tab!==name));
+  // leaving a tab stops whatever camera it was using; the user restarts on demand per tab
+  try{stopLive();}catch(e){} try{stopDoor();}catch(e){} try{stopCamera();}catch(e){}
+  if(name==="live") loadEvents();
+  if(name==="protocols") loadProtocols();
+  if(name==="remote") loadPairState();
+}
+document.querySelectorAll(".tab").forEach(b=> b.onclick=()=>showPanel(b.dataset.panel));
+
+// ===================== RECOGNITION HISTORY =====================
+function fmtTime(iso){ try{ return new Date(iso).toLocaleString(); }catch(e){ return iso; } }
+async function loadEvents(){
+  try{
+    const j=await (await api("/recognition/events",{headers:hdrs()})).json();
+    const box=$("#events"), evs=j.events||[];
+    if(!evs.length){ box.innerHTML='<p class="msg mut">No recognitions yet — start a live view, or wait for the guard to see someone at the door.</p>'; return; }
+    box.innerHTML="";
+    for(const e of evs){
+      const row=document.createElement("div"); row.className="evrow";
+      const url=`${BASE.replace(/\/$/,"")}/recognition/crop?id=${e.id}&token=${encodeURIComponent(SESSION)}`;
+      const thumb=e.has_crop ? `<img class="evthumb" src="${url}" alt="">` : '<div class="evthumb noimg">?</div>';
+      row.innerHTML=`${thumb}<div class="evmeta">
+          <div class="evname ${e.known?'k':'u'}">${e.known? e.name : 'Unknown'}</div>
+          <div class="evsub">${e.known? Math.round(e.confidence*100)+'% • ':''}${fmtTime(e.at)}</div>
+        </div><button class="evdel" data-id="${e.id}" title="Remove">×</button>`;
+      box.appendChild(row);
+    }
+    box.querySelectorAll(".evdel").forEach(b=> b.onclick=async()=>{
+      await api("/recognition/delete",{method:"POST",headers:hdrs(),body:JSON.stringify({id:b.dataset.id})}); loadEvents();
+    });
+  }catch(e){}
+}
+$("#evclear").onclick=async()=>{
+  if(!confirm("Clear all recognition history? Snapshots will be deleted from the guard.")) return;
+  await api("/recognition/clear",{method:"POST",headers:hdrs(),body:JSON.stringify({})}); loadEvents();
+};
+
+setInterval(()=>{ if(!$("#screen-app").classList.contains("hidden")&&SESSION){ activePanel()==="live"?loadEvents():loadQueue(); } }, 8000);
+</script>
+<!-- ============ INCOMING CALL (DRAFT#1 await_owner -> see_live | talk | reject) ============ -->
+<style>
+  #call-overlay{position:fixed;inset:0;z-index:9999;background:#0b1f17;color:#fff;display:none;
+                flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;
+                font-family:inherit;padding:22px;box-sizing:border-box;}
+  #call-overlay .sub{font-size:14px;opacity:.8;letter-spacing:.4px}
+  #call-overlay .big{font-size:22px;font-weight:600}
+  #call-thumb{width:74vw;max-width:360px;aspect-ratio:4/3;object-fit:cover;border-radius:18px;
+              border:2px solid rgba(255,255,255,.22);background:#06120d}
+  #call-video-wrap{width:94vw;max-width:560px;aspect-ratio:16/9;background:#000;border-radius:14px;
+                   overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #call-video-wrap video, #call-video-wrap video-stream{width:100%;height:100%;object-fit:contain}
+  .call-row{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+  .call-btn{border:0;border-radius:999px;padding:13px 24px;font-size:15px;font-weight:600;cursor:pointer}
+  .call-accept{background:#19a463;color:#fff}
+  .call-reject{background:#d23f3f;color:#fff}
+  .call-hint{font-size:12.5px;color:#bdebd6}
+</style>
+<div id="call-overlay">
+  <div id="call-ringing" style="display:none;flex-direction:column;align-items:center;gap:16px">
+    <div class="sub">GAARO · someone is at the door</div>
+    <img id="call-thumb" alt="door">
+    <div class="big">Incoming video call</div>
+    <div class="call-row">
+      <button id="call-see"  class="call-btn call-accept">See live</button>
+      <button id="call-talk" class="call-btn call-accept">Talk</button>
+      <button id="call-rej"  class="call-btn call-reject">Reject</button>
+    </div>
+  </div>
+  <div id="call-active" style="display:none;flex-direction:column;align-items:center;gap:14px">
+    <div id="call-mode-label" class="sub"></div>
+    <div id="call-video-wrap"><div class="call-hint" style="padding:16px">connecting to the door camera…</div></div>
+    <div id="call-talk-hint" class="call-hint" style="display:none">Mic is on — the visitor can hear you. Video is one-way (door → you).</div>
+    <button id="call-hang" class="call-btn call-reject">Hang up</button>
+  </div>
+</div>
+<script>
+(function(){
+  const q=(s)=>document.querySelector(s);
+  let CALL_ID=null, SHOWN=null, THUMB_T=null;
+
+  function base(){ return (typeof BASE!=="undefined" && BASE) ? BASE.replace(/\/$/,"") : ""; }
+  function snapURL(){ return base()+"/snapshot?token="+encodeURIComponent(SESSION)+"&_="+Date.now(); }
+
+  // ---- direct go2rtc WebRTC player (video + the visitor's audio). No external JS; uses go2rtc's
+  //      documented WS signaling: client sends webrtc/offer, go2rtc replies webrtc/answer. ----
+  let PC=null, WS=null, MIC=null;
+  function stopGo2rtc(){
+    try{ if(WS) WS.close(); }catch(e){}
+    try{ if(MIC){ MIC.getTracks().forEach(t=>{ try{ t.stop(); }catch(e){} }); } }catch(e){}
+    try{ if(PC){ PC.getReceivers().forEach(r=>{ try{ r.track&&r.track.stop(); }catch(e){} }); PC.close(); } }catch(e){}
+    WS=null; PC=null; MIC=null;
+  }
+  function showListenBtn(vid){
+    if(document.getElementById("call-listen")) return;
+    const wrap=q("#call-video-wrap"); wrap.style.position="relative";
+    const b=document.createElement("button");
+    b.id="call-listen"; b.className="call-btn call-accept"; b.textContent="\uD83D\uDD0A Tap to hear";
+    b.style.cssText="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:3";
+    b.onclick=()=>{ vid.muted=false; vid.play().catch(()=>{}); b.remove(); };
+    wrap.appendChild(b);
+  }
+  function tryPlay(vid){
+    vid.muted=false;                          // we WANT the visitor's audio
+    const p=vid.play();
+    if(p&&p.catch) p.catch(()=>{ vid.muted=true; vid.play().catch(()=>{}); showListenBtn(vid); });
+  }
+  async function startGo2rtc(wsUrl, vid, onFail, talk){
+    stopGo2rtc();
+    let gotTrack=false, opened=false;
+    const pc=new RTCPeerConnection({ iceServers:[{urls:"stun:stun.l.google.com:19302"}] }); PC=pc;
+    const ms=new MediaStream();
+    pc.addTransceiver("video",{direction:"recvonly"});
+    if(talk){
+      // owner -> visitor: capture the owner's mic and SEND it to the camera speaker (two-way).
+      // getUserMedia prompts for mic permission -- this runs inside the owner's Talk tap, so it's allowed.
+      try{
+        MIC=await navigator.mediaDevices.getUserMedia({audio:true});
+        pc.addTrack(MIC.getAudioTracks()[0], MIC);     // sendrecv: sends owner mic, still receives camera audio
+      }catch(e){ pc.addTransceiver("audio",{direction:"recvonly"}); }   // mic denied -> at least listen
+    } else {
+      pc.addTransceiver("audio",{direction:"recvonly"});
+    }
+    pc.ontrack=(ev)=>{ ms.addTrack(ev.track); vid.srcObject=ms; if(!gotTrack){ gotTrack=true; tryPlay(vid); } };
+    const ws=new WebSocket(wsUrl); WS=ws;
+    ws.onopen=async ()=>{ opened=true;
+      pc.onicecandidate=(ev)=>{ if(ev.candidate && ws.readyState===1) ws.send(JSON.stringify({type:"webrtc/candidate",value:ev.candidate.candidate})); };
+      try{ const off=await pc.createOffer(); await pc.setLocalDescription(off);
+        ws.send(JSON.stringify({type:"webrtc/offer",value:pc.localDescription.sdp})); }
+      catch(e){ onFail&&onFail(); }
+    };
+    ws.onmessage=async (m)=>{ let d; try{ d=JSON.parse(m.data); }catch(e){ return; }
+      if(d.type==="webrtc/answer"){ try{ await pc.setRemoteDescription({type:"answer",sdp:d.value}); }catch(e){} }
+      else if(d.type==="webrtc/candidate"&&d.value){ try{ await pc.addIceCandidate({candidate:d.value,sdpMid:"0",sdpMLineIndex:0}); }catch(e){} }
+    };
+    ws.onerror=()=>{ if(!gotTrack) onFail&&onFail(); };
+    ws.onclose=()=>{ if(!opened && !gotTrack) onFail&&onFail(); };
+  }
+  let SNAP_T=null;
+  function stopSnap(){ if(SNAP_T){ clearInterval(SNAP_T); SNAP_T=null; } }
+  function mjpegInto(wrap){
+    // Fallback view (used only if go2rtc WebRTC can't connect): poll the guard's OWN snapshot.
+    // This reuses the guard's frames -- it opens NO new camera connection, so it can't trip the
+    // camera's stream limit. Slower than WebRTC and video-only (no audio), but it always works.
+    const img=document.createElement("img"); img.alt="door";
+    img.style.cssText="width:100%;height:100%;object-fit:contain";
+    img.onerror=()=>{};
+    wrap.appendChild(img);
+    const tick=()=>{ img.src=base()+"/snapshot?token="+encodeURIComponent(SESSION)+"&_="+Date.now(); };
+    tick(); stopSnap(); SNAP_T=setInterval(tick, 700);
+  }
+  function go2rtcFailUI(c){
+    // go2rtc unreachable over wss -- nearly always its self-signed cert isn't accepted on this device yet.
+    // Keep VIDEO working via MJPEG, and prompt the one-time cert OK so audio can come up next time.
+    const wrap=q("#call-video-wrap"); wrap.innerHTML=""; wrap.style.position="relative";
+    mjpegInto(wrap);
+    const httpsBase=c.go2rtc_http||"";
+    if(httpsBase){
+      const note=document.createElement("div");
+      note.style.cssText="position:absolute;top:8px;left:0;right:0;padding:6px;font-size:12px;background:rgba(0,0,0,.6)";
+      note.innerHTML='Video only. For audio, <a href="'+httpsBase+'" target="_blank" style="color:#9fe7c4;text-decoration:underline">tap once to allow the camera</a> then reopen the call.';
+      wrap.appendChild(note);
+    }
+  }
+
+  function showRinging(c){
+    q("#call-overlay").style.display="flex"; q("#call-ringing").style.display="flex"; q("#call-active").style.display="none";
+    const img=q("#call-thumb"); img.src=snapURL();
+    if(THUMB_T) clearInterval(THUMB_T); THUMB_T=setInterval(()=>{ img.src=snapURL(); }, 1500);
+    q("#call-see").style.display  = (c.options||[]).includes("see_live")?"":"none";
+    q("#call-talk").style.display = (c.options||[]).includes("talk")?"":"none";
+  }
+
+  async function showActive(c){
+    q("#call-overlay").style.display="flex"; q("#call-ringing").style.display="none"; q("#call-active").style.display="flex";
+    if(THUMB_T){ clearInterval(THUMB_T); THUMB_T=null; }
+    const talk = c.mode==="talk";
+    q("#call-mode-label").textContent = talk ? "Live · door camera (talking)" : "Live · door camera";
+    q("#call-talk-hint").textContent = "Your mic is live \u2014 the visitor can hear you through the door camera.";
+    q("#call-talk-hint").style.display = talk ? "" : "none";
+
+    const wrap=q("#call-video-wrap"); wrap.style.position="relative"; wrap.innerHTML="";
+    const vid=document.createElement("video");
+    vid.id="call-live"; vid.autoplay=true; vid.playsInline=true; vid.setAttribute("playsinline","");
+    vid.style.cssText="width:100%;height:100%;object-fit:contain";
+    wrap.appendChild(vid);
+
+    // live door video + the VISITOR'S audio over go2rtc (WebRTC). On "talk" we ALSO send the owner's
+    // mic to the camera speaker. If go2rtc isn't reachable, fall back to MJPEG video.
+    if(c.go2rtc_ws){ startGo2rtc(c.go2rtc_ws, vid, ()=>go2rtcFailUI(c), talk); }
+    else { wrap.innerHTML=""; mjpegInto(wrap); }
+  }
+
+  function hide(){
+    stopGo2rtc(); stopSnap();
+    const lb=document.getElementById("call-listen"); if(lb) lb.remove();
+    q("#call-overlay").style.display="none"; q("#call-ringing").style.display="none"; q("#call-active").style.display="none";
+    if(THUMB_T){ clearInterval(THUMB_T); THUMB_T=null; }
+    q("#call-video-wrap").innerHTML='<div class="call-hint" style="padding:16px">connecting to the door camera…</div>';
+    SHOWN=null;
+  }
+
+  async function answer(choice){
+    if(!CALL_ID) return;
+    if(choice==="reject"){
+      try{ await api("/call/answer",{method:"POST",headers:hdrs(),body:JSON.stringify({call_id:CALL_ID,choice})}); }catch(e){}
+      hide(); return;
+    }
+    try{ await api("/call/answer",{method:"POST",headers:hdrs(),body:JSON.stringify({call_id:CALL_ID,choice})}); }catch(e){}
+    // open the live view NOW, still inside this tap, so the browser permits the visitor's audio to autoplay
+    try{ const r=await api("/call/current",{headers:hdrs()});
+      if(r.ok){ const c=await r.json(); if(c.state==="active"){ await showActive(c); SHOWN=c.call_id+":a"; } } }catch(e){}
+  }
+  async function hang(){
+    try{ await api("/call/hangup",{method:"POST",headers:hdrs(),body:JSON.stringify({call_id:CALL_ID})}); }catch(e){}
+    hide();
+  }
+
+  async function poll(){
+    if(typeof SESSION==="undefined" || !SESSION) return;
+    let c; try{ const r=await api("/call/current",{headers:hdrs()}); if(!r.ok) return; c=await r.json(); }catch(e){ return; }
+    if(c.state==="ringing"){ CALL_ID=c.call_id; if(SHOWN!==c.call_id+":r"){ showRinging(c); SHOWN=c.call_id+":r"; } }
+    else if(c.state==="active"){ CALL_ID=c.call_id; if(SHOWN!==c.call_id+":a"){ await showActive(c); SHOWN=c.call_id+":a"; } }
+    else { if(SHOWN) hide(); }
+  }
+
+  document.addEventListener("DOMContentLoaded", ()=>{
+    q("#call-see").onclick =()=>answer("see_live");
+    q("#call-talk").onclick=()=>answer("talk");
+    q("#call-rej").onclick =()=>answer("reject");
+    q("#call-hang").onclick=hang;
+  });
+  setInterval(poll, 1200);   // self-starting; no-ops until signed in
+})();
+</script>
+</body>
+</html>
