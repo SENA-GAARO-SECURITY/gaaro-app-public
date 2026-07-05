@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0E1116"/>
+<title>GAARO</title>
+<style>
+  :root{--ink:#0E1116;--surface:#171B22;--surface-2:#1E242E;--line:#2A313C;--text:#EAEEF3;--muted:#8B95A4;--accent:#34D399;--accent-ink:#052E22;--alert:#F59E0B;--danger:#F0575A;--r:16px}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{background:var(--ink);color:var(--text);font:400 16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .wrap{max-width:460px;margin:0 auto;min-height:100%;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 8px) 18px calc(env(safe-area-inset-bottom) + 8px)}
+  h1,h2,h3{margin:0;font-weight:650;letter-spacing:-.01em}
+  .mark{display:flex;align-items:center;gap:10px;font-weight:700;letter-spacing:.14em;font-size:14px;color:var(--muted)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(52,211,153,.14)}
+  .dot.off{background:var(--muted);box-shadow:none}
+  .muted{color:var(--muted)}.sm{font-size:13px}.xs{font-size:12px}.ok{color:var(--accent)}
+  .center{flex:1;display:flex;flex-direction:column;justify-content:center}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px}
+  .field{width:100%;background:var(--surface-2);border:1px solid var(--line);color:var(--text);border-radius:12px;padding:14px 15px;font-size:16px;outline:none;margin-top:8px}
+  .field:focus{border-color:#3C4756}
+  label{display:block;font-size:13px;color:var(--muted);margin-top:14px}
+  .btn{width:100%;border:0;border-radius:999px;padding:15px;font-size:16px;font-weight:650;background:var(--accent);color:var(--accent-ink);margin-top:16px;cursor:pointer;transition:.15s opacity}
+  .btn:disabled{opacity:.45}
+  .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .err{color:var(--danger);font-size:13px;min-height:18px;margin-top:10px}
+  .hidden{display:none !important}
+  .live{position:relative;border-radius:var(--r);overflow:hidden;background:#000;aspect-ratio:16/10;border:1px solid var(--line)}
+  .live video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+  .live .tag{position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:7px;background:rgba(8,10,14,.6);backdrop-filter:blur(6px);padding:6px 11px;border-radius:999px;font-size:12px}
+  .live .place{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;cursor:pointer}
+  .between{display:flex;align-items:center;justify-content:space-between}
+  .pill{font-size:12px;padding:5px 11px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);color:var(--muted)}
+  .pill.good{color:var(--accent);border-color:rgba(52,211,153,.3)}
+  .strip{display:flex;gap:10px;overflow-x:auto;padding:2px 0 4px;scrollbar-width:none}
+  .strip::-webkit-scrollbar{display:none}
+  .seen{flex:0 0 auto;width:64px;text-align:center}
+  .seen .thumb{width:64px;height:64px;border-radius:12px;object-fit:cover;background:var(--surface-2);border:1px solid var(--line)}
+  .seen .who{font-size:11px;margin-top:5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .seen.unknown .thumb{border-color:rgba(245,158,11,.4)}
+  .nav{position:sticky;bottom:0;display:flex;gap:6px;background:rgba(14,17,22,.9);backdrop-filter:blur(10px);border-top:1px solid var(--line);padding:8px 4px calc(env(safe-area-inset-bottom) + 6px);margin:12px -18px -8px}
+  .nav button{flex:1;background:none;border:0;color:var(--muted);font-size:11px;padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px}
+  .nav button.active{color:var(--accent)}
+  .nav .ic{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9}
+  .cam{position:relative;aspect-ratio:3/4;max-height:52vh;margin:0 auto;border-radius:var(--r);overflow:hidden;background:#000;border:1px solid var(--line)}
+  .cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+  .cam .ring{position:absolute;inset:12% 16%;border:2px dashed rgba(255,255,255,.35);border-radius:50%}
+  .cam.armed .ring{border-color:var(--accent);border-style:solid}
+  .prog{height:6px;border-radius:999px;background:var(--surface-2);overflow:hidden;margin-top:14px}
+  .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+  .callover{position:fixed;inset:0;z-index:50;background:rgba(4,6,10,.82);display:none;align-items:center;justify-content:center;padding:12px}
+  .callover.show{display:flex}
+  .callcard{position:relative;width:100%;max-width:390px;height:min(90vh,780px);background:#07090D;border-radius:22px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 70px rgba(0,0,0,.55);border:1px solid var(--line)}
+  .callvid{flex:1;position:relative;background:#000}
+  .callvid video,.callvid img{width:100%;height:100%;object-fit:cover}
+  .callmeta{position:absolute;top:16px;left:0;right:0;text-align:center;text-shadow:0 1px 6px rgba(0,0,0,.7);padding:0 12px}
+  .callmeta .big{font-size:19px;font-weight:650}
+  .callbar{position:absolute;left:0;right:0;bottom:0;padding:18px 18px calc(env(safe-area-inset-bottom) + 20px);display:flex;flex-direction:column;gap:14px;align-items:center;background:linear-gradient(to top,rgba(0,0,0,.6),rgba(0,0,0,.15),transparent)}
+  .callrow{display:flex;gap:30px;justify-content:center}
+  .cbtn{display:flex;flex-direction:column;align-items:center;gap:7px;color:#EAEEF3;font-size:12px;font-weight:500;background:none;border:0;cursor:pointer}
+  .cbtn .fab{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.16);border:none}
+  .cbtn.accept .fab{background:#22C55E}
+  .cbtn.reject .fab{background:#EF4444}
+  .cbtn.busy .fab{width:46px;height:46px;background:rgba(107,114,128,.9)}
+  .cbtn.busy{font-size:11px;opacity:.92}
+  .cbtn.end .fab{background:#EF4444}
+  .cbtn.mic .fab{background:rgba(255,255,255,.18)}
+  .cbtn.mic.off .fab{background:rgba(255,255,255,.30)}
+  .cbtn svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2}
+  .pulse{animation:pulse 1.6s ease-out infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(245,158,11,.5)}100%{box-shadow:0 0 0 22px rgba(245,158,11,0)}}
+  @media (prefers-reduced-motion:reduce){.pulse{animation:none}}
+  .ering{position:absolute;inset:3%;width:94%;height:94%;transform:rotate(-90deg);pointer-events:none}
+  .ering .tk{stroke:rgba(255,255,255,.22);stroke-width:3.2;stroke-linecap:round;transition:stroke .25s ease}
+  .ering .tk.on{stroke:var(--accent)}
+  .cam .done{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(5,46,34,.5)}
+  .cam .done svg{width:56px;height:56px;stroke:var(--accent);fill:none;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section id="s-auth" class="center hidden">
+    <div class="mark" style="justify-content:center;margin-bottom:26px"><span id="conn-dot" class="dot off"></span> GAARO</div>
+    <div class="card">
+      <h2 id="auth-title">Sign in</h2>
+      <p id="auth-sub" class="muted sm" style="margin:8px 0 0">Enter your phone number and we'll send a one-time code.</p>
+      <div id="step-phone">
+        <label>Phone number</label>
+        <input id="a-phone" class="field" placeholder="+91 90000 00001" inputmode="tel" autocomplete="tel"/>
+        <div id="a-namewrap" class="hidden"><label>Your name</label><input id="a-name" class="field" placeholder="e.g. Suneesh" autocomplete="name"/></div>
+        <button id="a-send" class="btn">Send code</button>
+      </div>
+      <div id="step-code" class="hidden">
+        <label>Enter the 6-digit code sent to <span id="a-shown" class="ok"></span></label>
+        <input id="a-code" class="field" placeholder="••••••" inputmode="numeric" maxlength="6" style="letter-spacing:.4em;text-align:center;font-size:22px"/>
+        <button id="a-verify" class="btn">Verify &amp; sign in</button>
+        <button id="a-back" class="btn ghost" style="margin-top:10px">Use a different number</button>
+      </div>
+      <div id="a-err" class="err"></div>
+    </div>
+  </section>
+  <section id="s-app" class="hidden" style="flex:1;display:flex;flex-direction:column">
+    <div id="tab-home" class="tab" style="flex:1">
+      <div class="between" style="margin:4px 0 14px"><div class="mark"><span class="dot"></span> GAARO</div><span id="h-status" class="pill">Connecting…</span></div>
+      <div class="live"><video id="h-live" playsinline autoplay muted></video><div id="h-place" class="place">Tap to view the front door</div><div id="h-livetag" class="tag hidden"><span class="dot"></span> <span>Front door · live</span></div></div>
+      <button id="h-viewbtn" class="btn ghost" style="margin-top:12px">View front door</button>
+      <h3 style="margin:20px 0 10px">Recently at the door</h3>
+      <div id="h-seen" class="strip"><span class="muted sm">No one yet.</span></div>
+    </div>
+    <div id="tab-enroll" class="tab hidden" style="flex:1">
+      <h2 style="margin:6px 0 4px">Add a face</h2>
+      <p class="muted sm" style="margin:0 0 14px">The guard learns this person across three angles so it stays quiet for them. Faces never leave your guard.</p>
+      <label>Their name</label><input id="e-name" class="field" placeholder="e.g. Achan" autocomplete="off"/>
+      <div id="e-camwrap" class="hidden" style="margin-top:16px">
+        <div id="e-cam" class="cam">
+          <video id="e-video" playsinline muted></video>
+          <svg id="e-ring" class="ering" viewBox="0 0 100 100"></svg>
+          <div id="e-done" class="done"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></div>
+        </div>
+        <p id="e-title" style="text-align:center;margin:14px 0 2px;font-weight:650">Position your face in the circle</p>
+        <p id="e-hint" class="muted sm" style="text-align:center;margin:0;min-height:18px"></p>
+      </div>
+      <button id="e-start" class="btn">Start capture</button><div id="e-err" class="err"></div>
+    </div>
+    <div id="tab-profile" class="tab hidden" style="flex:1">
+      <h2 style="margin:6px 0 4px">Your profile</h2>
+      <p id="p-phone" class="muted sm" style="margin:0 0 16px"></p>
+      <div class="card">
+        <label>Name</label><input id="p-name" class="field" placeholder="Your name"/>
+        <label>Set a password <span class="muted xs">(optional)</span></label>
+        <input id="p-pass" class="field" type="password" placeholder="••••••••" autocomplete="new-password"/>
+        <button id="p-save" class="btn">Save</button><div id="p-msg" class="err"></div>
+      </div>
+      <button id="p-out" class="btn ghost" style="margin-top:16px">Sign out</button>
+      <p class="muted xs" id="p-version" style="margin-top:16px;text-align:center;opacity:.6"></p>
+    </div>
+    <nav class="nav">
+      <button data-tab="home" class="active"><svg class="ic" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</button>
+      <button data-tab="enroll"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Faces</button>
+      <button data-tab="profile"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Profile</button>
+    </nav>
+  </section>
+</div>
+<div id="call" class="callover">
+  <div class="callcard">
+    <div class="callvid"><video id="call-video" playsinline autoplay></video><img id="call-still" class="hidden" alt=""/>
+      <div class="callmeta"><div class="big" id="call-who">Someone's at the door</div><div class="muted sm">Front door</div></div>
+      <!-- RINGING: Accept + Reject (one row), Busy below -->
+      <div id="call-ring" class="callbar">
+        <div class="callrow">
+          <button class="cbtn accept" id="call-accept"><span class="fab pulse"><svg viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2H7a2 2 0 012 1.7c.1.9.3 1.8.6 2.6a2 2 0 01-.5 2.1L8 9.6a16 16 0 006 6l1.2-1.2a2 2 0 012.1-.4c.8.3 1.7.5 2.6.6A2 2 0 0122 16.9z"/></svg></span>Accept</button>
+          <button class="cbtn reject" id="call-reject"><span class="fab"><svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M21 15.5V19a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-2h3.5"/></svg></span>Reject</button>
+        </div>
+        <button class="cbtn busy" id="call-busy"><span class="fab"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>Busy</button>
+      </div>
+      <!-- LIVE (after Accept): mic toggle + End call -->
+      <div id="call-live" class="callbar hidden">
+        <div class="callrow">
+          <button class="cbtn mic" id="call-mic"><span class="fab"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></span><span id="call-mic-l">Mute</span></button>
+          <button class="cbtn end" id="call-hang"><span class="fab"><svg viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M21 15.5V19a2 2 0 01-2 2A16 16 0 013 5a2 2 0 012-2h3.5"/></svg></span>End call</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+/* =====================================================================================
+   GAARO USER APP  —  v1.0   (aligned with Gaaro SCC V12)
+   -------------------------------------------------------------------------------------
+   END-TO-END FLOW (owner side):
+     sign in (Supabase Auth phone OTP)  ->  connect to the guard over Supabase Realtime
+     Broadcast  ->  enroll household faces (Face-ID 3-arc)  ->  receive a ring when an
+     UNKNOWN visitor is at the door  ->  answer: live door video + two-way audio.
+   SCC CONTRACT this implements (all verified present in Gaaro SCC V12):
+     * identity: Supabase Auth JWT sent as the request token; the guard validates it
+       (owner-only) via /auth/v1/user. channelFor() = sha256(digits-only phone) — the
+       SAME channel the guard derives from its PAIRED account phone.
+     * api() over Broadcast -> guard endpoints: /enroll/start|frame|finalize|cancel,
+       /ice, /call/current|answer|hangup, /auth/status, /auth/profile, /steps/ingest.
+     * media: WebRTC (offer/answer over Broadcast) to go2rtc; ICE minted per call (/ice).
+   NOTE: the door-front conversation with a visitor is the GUARD's job (RAG, later) — the
+   app never speaks; it only lets the OWNER see/talk on a call.
+   ===================================================================================== */
+const APP_VERSION   = "1.3";                 // Gaaro User App version (aligned with SCC V28)
+/* ===== CONFIG — fill once. SUPABASE_ANON is publishable (safe in client). ICE is minted per
+   call by the guard (/ice); the app holds NO TURN secret. ===== */
+const SUPABASE_URL  = "https://qbwbjcqgyaafpofumcho.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFid2JqY3FneWFhZnBvZnVtY2hvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIwMzI4NzQsImV4cCI6MjA5NzYwODg3NH0.XVws0Etcs5TxN48BiGVxzHAu3_WFaSJlhGg8d1vd9MQ";
+/* The app holds NO TURN secret. It asks the guard for ICE per connection (mint_ice): live view gets
+   STUN-only (free), a doorbell call gets short-lived TURN. This list is only a fallback if that ask fails. */
+const ICE_FALLBACK = [{ urls:"stun:stun.cloudflare.com:3478" }, { urls:"stun:stun.l.google.com:19302" }];
+
+const $ = s => document.querySelector(s);
+let SESSION = localStorage.getItem("gaaro_session") || "";
+let REFRESH = localStorage.getItem("gaaro_refresh") || "";      // Supabase refresh_token (rotates on use)
+let EXP     = Number(localStorage.getItem("gaaro_exp") || 0);   // access_token expiry, unix seconds
+let PHONE = localStorage.getItem("gaaro_phone") || "", NEEDS_SETUP = false;
+
+/* ===== SESSION LIFECYCLE (fix: v1.2 stored only access_token and never refreshed, so after ~1h the
+   guard 401'd every call -> "Guard offline / No one yet" while the guard kept announcing locally). ===== */
+function _jwtExp(t){ try{ return Number(JSON.parse(atob(t.split(".")[1])).exp) || 0; }catch(e){ return 0; } }
+function _persistSession(j){
+  SESSION = j.access_token || "";
+  REFRESH = j.refresh_token || REFRESH;                         // keep old refresh if server omits it
+  EXP = Number(j.expires_at
+        || (j.expires_in ? Math.floor(Date.now()/1000) + Number(j.expires_in) : 0))
+        || _jwtExp(SESSION);
+  localStorage.setItem("gaaro_session", SESSION);
+  localStorage.setItem("gaaro_refresh", REFRESH);
+  localStorage.setItem("gaaro_exp", String(EXP));
+}
+function _clearSession(){
+  SESSION=""; REFRESH=""; EXP=0;
+  localStorage.removeItem("gaaro_session");
+  localStorage.removeItem("gaaro_refresh");
+  localStorage.removeItem("gaaro_exp");
+}
+let _refreshing=null;
+/* Returns true if we hold a valid (or just-refreshed) access_token; false = must re-authenticate.
+   Called before every guard request. No-op when the token is still fresh (60s margin). */
+async function ensureFresh(){
+  if(!SESSION) return false;
+  const exp = EXP || _jwtExp(SESSION);
+  if(exp && exp - 60 > Date.now()/1000) return true;            // still valid
+  if(!REFRESH){ _clearSession(); return false; }                // nothing to refresh with -> re-auth
+  if(_refreshing) return _refreshing;                           // coalesce concurrent refreshes
+  _refreshing = (async()=>{
+    try{
+      const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method:"POST",
+        headers:{ "apikey":SUPABASE_ANON, "Content-Type":"application/json" },
+        body: JSON.stringify({ refresh_token: REFRESH }) });
+      const j = await resp.json().catch(()=>({}));
+      if(resp.ok && j.access_token){ _persistSession(j); return true; }
+      _clearSession(); return false;                            // refresh token rejected/expired -> re-auth
+    }catch(e){ return false; }                                  // transient network error -> keep tokens, retry next call
+    finally{ _refreshing=null; }
+  })();
+  return _refreshing;
+}
+let sb=null, chan=null, connected=false;
+
+async function channelFor(phone){
+  const digits=(phone||"").replace(/\D/g,"");
+  const buf=await crypto.subtle.digest("SHA-256", new TextEncoder().encode(digits));
+  const hex=[...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  return "gaaro-rtc-"+hex.slice(0,24);
+}
+function view(id){ for(const s of ["s-auth","s-app"]) $("#"+s).classList.toggle("hidden", s!==id); }
+function markConn(on){ const d=$("#conn-dot"); if(d) d.className="dot"+(on?"":" off"); }
+
+const pending=new Map(), rtcWaiters=new Map();
+async function connect(phone){
+  if(sb&&chan){ try{ await sb.removeChannel(chan); }catch(e){} }
+  sb=createClient(SUPABASE_URL, SUPABASE_ANON, { realtime:{ params:{ eventsPerSecond:20 } } });
+  const name=await channelFor(phone);
+  chan=sb.channel(name, { config:{ broadcast:{ self:false } } });
+  chan.on("broadcast", { event:"broadcast" }, ({payload})=> onFrame(payload && payload.payload));
+  await new Promise(res=> chan.subscribe(st=>{ if(st==="SUBSCRIBED"){ connected=true; markConn(true); res(); } }));
+}
+function send(obj){ if(chan) chan.send({ type:"broadcast", event:"broadcast", payload:{ payload:obj } }); }
+function onFrame(f){
+  if(!f||typeof f!=="object") return;
+  if(f.t==="api_res" && pending.has(f.id)){ pending.get(f.id)({status:f.status, body:f.body}); pending.delete(f.id); }
+  else if(f.t==="rtc" && rtcWaiters.has(f.id)){ rtcWaiters.get(f.id)(f); }
+}
+let _id=0; const nid=()=> (++_id)+"-"+Math.random().toString(36).slice(2,7);
+async function api(method, path, body){
+  await ensureFresh();                       // swap in a fresh access_token if ours is stale/expired
+  return new Promise(resolve=>{
+    const id=nid();
+    const to=setTimeout(()=>{ if(pending.has(id)){ pending.delete(id); resolve({status:504, body:{error:"guard didn't answer"}}); } }, 12000);
+    pending.set(id, v=>{ clearTimeout(to); resolve(v); });
+    send({ t:"api", id, method, path, body, token: SESSION||undefined });
+  });
+}
+// steps go to the GUARD (aggregated to the GAARO DB); the app never displays logs
+function logStep(name, tags){ try{ api("POST","/steps/ingest",{ step:name, tags:tags||{} }); }catch(e){} }
+async function webrtc(videoEl, talk, keep, purpose){
+  let iceServers = ICE_FALLBACK;
+  try{ const r = await api("POST","/ice",{ purpose: purpose||"call" });
+    if(r.status===200 && r.body.iceServers && r.body.iceServers.length) iceServers = r.body.iceServers; }catch(e){}
+  const pc=new RTCPeerConnection({ iceServers }); keep&&keep(pc);
+  const ms=new MediaStream(); let got=false;
+  pc.addTransceiver("video",{direction:"recvonly"});
+  if(talk){ try{ const mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      pc.addTrack(mic.getAudioTracks()[0], mic); pc._mic=mic; }catch(e){ pc.addTransceiver("audio",{direction:"recvonly"}); } }
+  else pc.addTransceiver("audio",{direction:"recvonly"});
+  pc.ontrack=ev=>{ ms.addTrack(ev.track); videoEl.srcObject=ms; if(!got){ got=true; videoEl.play&&videoEl.play().catch(()=>{}); } };
+  const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
+  // go2rtc is NON-TRICKLE: our ICE candidates must be INSIDE the offer SDP, or media has no path back.
+  // So wait for ICE gathering to finish (with a 3s cap), then send the COMPLETE localDescription.
+  await new Promise(res=>{
+    if(pc.iceGatheringState==="complete") return res();
+    const done=()=>{ if(pc.iceGatheringState==="complete"){ pc.removeEventListener("icegatheringstatechange",done); res(); } };
+    pc.addEventListener("icegatheringstatechange",done);
+    setTimeout(res, 3000);
+  });
+  const id=nid();
+  const answer=await new Promise(res=>{ const to=setTimeout(()=>{ rtcWaiters.delete(id); res(null); }, 15000);
+    rtcWaiters.set(id, f=>{ clearTimeout(to); rtcWaiters.delete(id); res(f); });
+    send({ t:"rtc", id, kind:"offer", sdp:(pc.localDescription&&pc.localDescription.sdp)||offer.sdp }); });
+  if(!answer || answer.kind!=="answer" || !answer.sdp){ try{pc.close();}catch(e){} return null; }
+  try{ await pc.setRemoteDescription({ type:"answer", sdp:answer.sdp }); }catch(e){ return null; }
+  return pc;
+}
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+(async function(){
+  view("s-auth");
+  if(PHONE){ try{ await connect(PHONE); }catch(e){} }
+  // Gate on a token-checked endpoint. /auth/status is PUBLIC (always 200) and cannot confirm sign-in;
+  // /status runs through the guard's token check, so a 200 here means our JWT is actually accepted.
+  if(SESSION && connected){ await ensureFresh(); if(SESSION){ const r=await api("GET","/status"); if(r.status===200){ return enterApp(); } } }
+  startAuth();
+})();
+
+async function startAuth(){
+  view("s-auth");
+  if(PHONE && connected){ try{ const j=(await api("GET","/auth/status")).body||{}; NEEDS_SETUP=!!j.setup_required; }catch(e){} }
+  $("#auth-title").textContent = NEEDS_SETUP ? "Set up your guard" : "Sign in";
+  $("#auth-sub").textContent = NEEDS_SETUP ? "Register your phone — this becomes the owner of your guard." : "Enter your phone number and we'll send a one-time code.";
+  $("#a-namewrap").classList.toggle("hidden", !NEEDS_SETUP);
+  $("#step-phone").classList.remove("hidden"); $("#step-code").classList.add("hidden"); $("#a-err").textContent="";
+  if(PHONE) $("#a-phone").value=PHONE;
+}
+$("#a-send").onclick=async()=>{
+  PHONE=$("#a-phone").value.trim();
+  if(!PHONE){ return ($("#a-err").textContent="Enter your phone number."); }
+  $("#a-err").textContent="Connecting…"; $("#a-send").disabled=true;
+  try{
+    localStorage.setItem("gaaro_phone", PHONE);
+    // Supabase Auth phone OTP (cloud-issued). Only provisioned customers can sign in.
+    $("#a-namewrap").classList.add("hidden");   // no SCC-side setup step in the cloud-auth model
+    const resp=await fetch(`${SUPABASE_URL}/auth/v1/otp`,{ method:"POST",
+      headers:{ "apikey":SUPABASE_ANON, "Content-Type":"application/json" },
+      body:JSON.stringify({ phone:PHONE, create_user:false }) });
+    if(!resp.ok){ const j=await resp.json().catch(()=>({}));
+      throw (j.msg||j.error_description||j.error||"Couldn't send the code.") +
+        (resp.status===422?" — this number isn't provisioned yet.":""); }
+    logStep("app.otp_requested"); $("#a-shown").textContent=PHONE; $("#step-phone").classList.add("hidden"); $("#step-code").classList.remove("hidden"); $("#a-err").textContent=""; $("#a-code").focus();
+  }catch(e){ $("#a-err").textContent=(""+e); } finally{ $("#a-send").disabled=false; }
+};
+$("#a-back").onclick=()=> startAuth();
+$("#a-verify").onclick=async()=>{
+  const otp=$("#a-code").value.trim();
+  if(otp.length<4){ return ($("#a-err").textContent="Enter the code."); }
+  $("#a-err").textContent="Verifying…"; $("#a-verify").disabled=true;
+  try{
+    const resp=await fetch(`${SUPABASE_URL}/auth/v1/verify`,{ method:"POST",
+      headers:{ "apikey":SUPABASE_ANON, "Content-Type":"application/json" },
+      body:JSON.stringify({ type:"sms", phone:PHONE, token:otp }) });
+    const j=await resp.json().catch(()=>({}));
+    if(!(resp.ok && j.access_token)) throw (j.msg||j.error_description||j.error||"Wrong or expired code.");
+    _persistSession(j);                     // store access_token + refresh_token + expiry (fixes silent 1h expiry)
+    // best-effort: connect to the guard over Broadcast for live-view/calls (unchanged transport)
+    try{ await connect(PHONE); }catch(e){}
+    enterApp();
+  }catch(e){ $("#a-err").textContent=(""+e); } finally{ $("#a-verify").disabled=false; }
+};
+
+let seenTimer=null, callTimer=null;
+function setVersionTag(){ const e=$("#p-version"); if(e) e.textContent="Gaaro User App v"+APP_VERSION+" · aligned with Gaaro SCC V28"; }
+function enterApp(){ setVersionTag();
+  view("s-app"); goTab("home");
+  logStep("app.signed_in");
+  refreshStatus(); refreshSeen();
+  seenTimer=setInterval(()=>{ refreshStatus(); refreshSeen(); }, 8000);
+  callTimer=setInterval(watchCall, 2500); watchCall(); loadProfile();
+}
+document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>goTab(b.dataset.tab));
+function goTab(name){
+  for(const t of ["home","enroll","profile"]) $("#tab-"+t).classList.toggle("hidden", t!==name);
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active", b.dataset.tab===name));
+  if(name!=="enroll") stopEnrollCam();
+  if(name!=="home") stopLive();
+}
+async function refreshStatus(){
+  const r=await api("GET","/status");
+  if(r.status===200){ const live=(r.body.live_tracks||0)>0;
+    $("#h-status").textContent=live?(r.body.live_tracks+" at the door"):"All quiet"; $("#h-status").className="pill "+(live?"good":""); markConn(true);
+  } else { $("#h-status").textContent="Guard offline"; $("#h-status").className="pill"; markConn(false); }
+}
+async function refreshSeen(){
+  const r=await api("GET","/recognition/events"); if(r.status!==200) return;
+  const ev=(r.body.events||[]).slice(0,12), box=$("#h-seen");
+  if(!ev.length){ box.innerHTML='<span class="muted sm">No one yet.</span>'; return; }
+  box.innerHTML=ev.map(e=>{ const known=e.name&&e.name!=="unknown";
+    const t=e.crop_data?`<img class="thumb" src="${e.crop_data}"/>`:`<div class="thumb"></div>`;
+    return `<div class="seen ${known?'':'unknown'}">${t}<div class="who">${known?esc(e.name):'Unknown'}</div></div>`; }).join("");
+}
+
+let livePC=null;
+$("#h-viewbtn").onclick=()=> startLive();
+$("#h-place").onclick=()=> startLive();
+async function startLive(){
+  if(livePC) return;
+  $("#h-place").textContent="Connecting to the door…";
+  const pc=await webrtc($("#h-live"), false, p=>livePC=p, "live_view");
+  if(!pc){ $("#h-place").textContent="Couldn't connect. Tap to retry."; livePC=null; }
+  else { $("#h-place").classList.add("hidden"); $("#h-livetag").classList.remove("hidden"); $("#h-viewbtn").classList.add("hidden"); logStep("app.live_view_opened"); }
+}
+function stopLive(){ try{ livePC&&livePC.close(); }catch(e){} livePC=null;
+  const p=$("#h-place"); if(p){ p.classList.remove("hidden"); p.textContent="Tap to view the front door"; }
+  $("#h-livetag")&&$("#h-livetag").classList.add("hidden"); $("#h-viewbtn")&&$("#h-viewbtn").classList.remove("hidden"); }
+
+// ===== Enrollment — Face-ID three-arc, SCC-authoritative (B-protocol via api()) =====
+// Writes to the guard's encrypted gallery through /enroll/*, so the door recognizes them.
+// A local face check drives the overlay instantly; a frame is only sent to the guard when a
+// face is roughly present (keeps round-trips low). Each arc fills ONLY on the guard's verdict.
+let eStream=null, eRunning=false, eSid=null, eDetector=null, eSending=false;
+const E_POSES=["frontal","left","right"], E_TICKS=48;
+const E_TITLE={frontal:"Look straight ahead", left:"Turn slowly to your left", right:"Turn slowly to your right"};
+function eBuildRing(){
+  const svg=$("#e-ring"); svg.innerHTML="";
+  for(let i=0;i<E_TICKS;i++){ const a=i/E_TICKS*2*Math.PI, r1=44,r2=49,cx=50,cy=50;
+    const l=document.createElementNS("http://www.w3.org/2000/svg","line");
+    l.setAttribute("x1",cx+r1*Math.cos(a)); l.setAttribute("y1",cy+r1*Math.sin(a));
+    l.setAttribute("x2",cx+r2*Math.cos(a)); l.setAttribute("y2",cy+r2*Math.sin(a));
+    l.setAttribute("class","tk"); l.dataset.i=i; svg.appendChild(l); }
+}
+function ePaintRing(captured){ const per=E_TICKS/E_POSES.length, done=new Set(captured||[]);
+  document.querySelectorAll("#e-ring .tk").forEach(t=>{ const seg=Math.floor(parseInt(t.dataset.i)/per);
+    t.classList.toggle("on", done.has(E_POSES[seg])); }); }
+async function eMakeDetector(){
+  if("FaceDetector" in window){ try{ const fd=new window.FaceDetector({fastMode:true,maxDetectedFaces:1});
+    return async v=>{ try{ const f=await fd.detect(v); return f&&f.length===1; }catch(e){ return true; } }; }catch(e){} }
+  return async ()=> true;   // no native detector -> send frames; the guard still gates authoritatively
+}
+function eGrabB64(){ const v=$("#e-video"), c=document.createElement("canvas");
+  c.width=v.videoWidth||640; c.height=v.videoHeight||480; c.getContext("2d").drawImage(v,0,0,c.width,c.height);
+  return c.toDataURL("image/jpeg",.9).split(",")[1]; }
+
+$("#e-start").onclick=async()=>{
+  const name=$("#e-name").value.trim();
+  if(!name){ return ($("#e-err").textContent="Enter their name first."); }
+  $("#e-err").textContent=""; if(eStream) return;
+  try{
+    eStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user",width:640,height:640},audio:false});
+    $("#e-video").srcObject=eStream; await $("#e-video").play();
+    $("#e-camwrap").classList.remove("hidden"); $("#e-done").style.display="none";
+    $("#e-start").textContent="Capturing…"; $("#e-start").disabled=true;
+    eDetector=await eMakeDetector(); eBuildRing(); ePaintRing([]);
+    const r=await api("POST","/enroll/start",{name});
+    if(r.status!==200 || !(r.body&&r.body.session_id)){ $("#e-err").textContent=(r.body&&r.body.error)||"Couldn't reach the guard to start."; stopEnrollCam(); return; }
+    eSid=r.body.session_id; eRunning=true; eLoop();
+  }catch(e){ $("#e-err").textContent="Camera unavailable. Check browser permission."; stopEnrollCam(); }
+};
+function stopEnrollCam(){ eRunning=false;
+  if(eSid){ try{ api("POST","/enroll/cancel",{session_id:eSid}); }catch(e){} eSid=null; }
+  try{(eStream&&eStream.getTracks()||[]).forEach(t=>t.stop());}catch(e){} eStream=null;
+  $("#e-camwrap")&&$("#e-camwrap").classList.add("hidden");
+  const b=$("#e-start"); if(b){ b.textContent="Start capture"; b.disabled=false; } }
+async function eLoop(){
+  while(eRunning){
+    let faceOk=true; try{ faceOk=await eDetector($("#e-video")); }catch(e){}
+    if(faceOk && !eSending){
+      eSending=true;
+      const r=await api("POST","/enroll/frame",{session_id:eSid, image_b64:eGrabB64()});
+      eSending=false;
+      if(r.status===200 && r.body){ eApply(r.body); if(r.body.state==="enrollment_complete"){ await eFinish(); return; } }
+      else if(r.status!==200){ $("#e-hint").textContent="Reconnecting to the guard…"; }
+    }
+    await new Promise(r=>setTimeout(r,180));   // ~5 fps to the guard; overlay stays local
+  }
+}
+function eApply(fb){
+  ePaintRing(fb.captured||[]);                            // arc advances ONLY on the guard's verdict
+  if(fb.current_target){ $("#e-title").textContent=E_TITLE[fb.current_target]||"Center your face"; }
+  const rs=fb.live_reason||"";
+  $("#e-hint").textContent = rs==="good, captured" ? "Great — hold still" :
+    rs==="hold steady" ? "Hold still…" :
+    rs.indexOf("no face")>=0 ? "Center your face in the circle" :
+    rs.indexOf("faces in frame")>=0 ? "Only one person, please" : rs;
+}
+async function eFinish(){
+  eRunning=false; const name=$("#e-name").value.trim();
+  try{ const r=await api("POST","/enroll/finalize",{session_id:eSid});
+    if(r.status===200){ logStep("app.face_enrolled"); } }catch(e){}
+  eSid=null; $("#e-done").style.display="flex";
+  $("#e-title").textContent=name+" is enrolled";
+  $("#e-hint").innerHTML='<span class="ok">The guard will stay quiet for '+esc(name||"them")+'.</span>';
+  $("#e-name").value=""; setTimeout(stopEnrollCam,1800);
+}
+
+async function loadProfile(){
+  const j=(await api("GET","/auth/status")).body||{};
+  $("#p-name").value=j.name||""; $("#p-phone").textContent=j.has_phone?("Signed in"+(j.name?(" as "+j.name):"")):"";
+}
+$("#p-save").onclick=async()=>{
+  $("#p-msg").textContent="Saving…"; $("#p-msg").className="err";
+  const body={name:$("#p-name").value.trim()}; const pw=$("#p-pass").value; if(pw) body.password=pw;
+  const r=await api("POST","/auth/profile", body);
+  if(r.status===200 && r.body.ok){ $("#p-msg").className="err ok"; $("#p-msg").textContent="Saved."; $("#p-pass").value=""; }
+  else $("#p-msg").textContent="Couldn't save.";
+};
+$("#p-out").onclick=async()=>{
+  try{ await api("POST","/auth/logout",{token:SESSION}); }catch(e){}
+  _clearSession();
+  clearInterval(seenTimer); clearInterval(callTimer); startAuth();
+};
+
+let CALL_ID=null, SHOWN="", callPC=null, micOn=false;
+async function watchCall(){
+  const r=await api("GET","/call/current"); if(r.status!==200) return;
+  const c=r.body||{};
+  if(c.state==="ringing"){ CALL_ID=c.call_id; if(SHOWN!==c.call_id){ SHOWN=c.call_id; showRinging(); } }
+  else if(c.state==="idle" || !c.state){ if($("#call").classList.contains("show") && !document.body.dataset.incall) hideCall(); if(c.state==="idle") SHOWN=""; }
+}
+function showRinging(){
+  document.body.dataset.incall="";
+  $("#call-ring").classList.remove("hidden"); $("#call-live").classList.add("hidden");
+  $("#call-video").classList.add("hidden"); $("#call-still").classList.add("hidden");
+  $("#call").classList.add("show");
+  if(navigator.vibrate) navigator.vibrate([300,150,300]);
+}
+function hideCall(){
+  $("#call").classList.remove("show"); delete document.body.dataset.incall;
+  try{ callPC&&callPC._echoAC&&callPC._echoAC.close(); }catch(e){}
+  try{ callPC&&callPC._mic&&callPC._mic.getTracks().forEach(t=>t.stop()); }catch(e){}
+  try{ callPC&&callPC.close(); }catch(e){} callPC=null; micOn=false; CALL_ID=null;
+}
+async function answerCall(choice){
+  await api("POST","/call/answer",{call_id:CALL_ID, choice});
+  logStep("app.call_answered",{choice});
+  if(choice==="reject" || choice==="busy"){ hideCall(); return; }   // both decline (distinct keys)
+  // accept -> video + two-way audio
+  document.body.dataset.incall="1";
+  $("#call-ring").classList.add("hidden"); $("#call-live").classList.remove("hidden");
+  micOn=true; $("#call-mic-l").textContent="Mute"; $("#call-mic").classList.remove("off");
+  $("#call-video").classList.remove("hidden");
+  const pc=await webrtc($("#call-video"), true, p=>callPC=p, "call");
+  if(!pc){ $("#call-still").classList.remove("hidden"); return; }
+  echoGuard(pc);      // half-duplex ducking (see below)
+}
+// Echo mitigation (app-side, partial): while the INBOUND door audio is loud, disable our outbound mic so
+// the laptop-speaker -> laptop-mic feedback loop can't send the owner's own voice back as an echo. Proper
+// AEC / half-duplex arbitration at the door is a separate workstream. Respects a manual mute.
+function echoGuard(pc){
+  try{
+    const tracks=(pc.getReceivers()||[]).filter(r=>r.track&&r.track.kind==="audio").map(r=>r.track);
+    if(!tracks.length) return;
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    const ac=new AC(); pc._echoAC=ac;
+    const an=ac.createAnalyser(); an.fftSize=512;
+    ac.createMediaStreamSource(new MediaStream(tracks)).connect(an);
+    const buf=new Uint8Array(an.fftSize);
+    const tick=()=>{
+      if(!callPC||callPC!==pc){ try{ac.close();}catch(e){} return; }
+      an.getByteTimeDomainData(buf);
+      let s=0; for(let i=0;i<buf.length;i++){ const d=(buf[i]-128)/128; s+=d*d; }
+      const loud=Math.sqrt(s/buf.length) > 0.06;         // the door end is speaking
+      if(callPC._mic && micOn) callPC._mic.getAudioTracks().forEach(t=> t.enabled = !loud);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }catch(e){}
+}
+$("#call-accept").onclick=()=> answerCall("accept");
+$("#call-reject").onclick=()=> answerCall("reject");
+$("#call-busy").onclick=()=> answerCall("busy");
+$("#call-hang").onclick=async()=>{ try{ await api("POST","/call/hangup",{call_id:CALL_ID}); }catch(e){} hideCall(); };
+$("#call-mic").onclick=()=>{ if(!callPC||!callPC._mic) return; micOn=!micOn; callPC._mic.getAudioTracks().forEach(t=>t.enabled=micOn); $("#call-mic-l").textContent=micOn?"Mute":"Unmute"; $("#call-mic").classList.toggle("off",!micOn); };
+</script>
+</body>
+</html>
