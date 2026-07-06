@@ -144,7 +144,7 @@
 </div>
 <div id="call" class="callover">
   <div class="callcard">
-    <div class="callvid"><video id="call-video" playsinline autoplay></video><img id="call-still" class="hidden" alt=""/>
+    <div class="callvid"><video id="call-video" playsinline autoplay muted></video><audio id="call-audio" autoplay playsinline></audio><img id="call-still" class="hidden" alt=""/>
       <div class="callmeta"><div class="big" id="call-who">Someone's at the door</div><div class="muted sm">Front door</div></div>
       <!-- RINGING: Accept + Reject (one row), Busy below -->
       <div id="call-ring" class="callbar">
@@ -279,25 +279,37 @@ async function api(method, path, body){
 }
 // steps go to the GUARD (aggregated to the GAARO DB); the app never displays logs
 function logStep(name, tags){ try{ api("POST","/steps/ingest",{ step:name, tags:tags||{} }); }catch(e){} }
-async function webrtc(videoEl, talk, keep, purpose){
+async function webrtc(sinkEl, opts){
+  // opts = { video:bool(default true), audio:"recv"|"talk"|"none"(default "recv"),
+  //          purpose:"live_view"|"call", gatherCapMs:number, keep:fn }
+  opts = opts || {};
+  const purpose   = opts.purpose || "call";
+  const wantVideo = opts.video !== false;         // recvonly door video
+  const audioMode = opts.audio || "recv";         // recv door audio / talk (mic+door) / none
+  const capMs     = opts.gatherCapMs || 800;      // was a flat 3000ms — the biggest post-Accept delay
   let iceServers = ICE_FALLBACK;
-  try{ const r = await api("POST","/ice",{ purpose: purpose||"call" });
+  try{ const r = await api("POST","/ice",{ purpose });
     if(r.status===200 && r.body.iceServers && r.body.iceServers.length) iceServers = r.body.iceServers; }catch(e){}
-  const pc=new RTCPeerConnection({ iceServers }); keep&&keep(pc);
+  const pc=new RTCPeerConnection({ iceServers }); if(opts.keep) opts.keep(pc);
   const ms=new MediaStream(); let got=false;
-  pc.addTransceiver("video",{direction:"recvonly"});
-  if(talk){ try{ const mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-      pc.addTrack(mic.getAudioTracks()[0], mic); pc._mic=mic; }catch(e){ pc.addTransceiver("audio",{direction:"recvonly"}); } }
-  else pc.addTransceiver("audio",{direction:"recvonly"});
-  pc.ontrack=ev=>{ ms.addTrack(ev.track); videoEl.srcObject=ms; if(!got){ got=true; videoEl.play&&videoEl.play().catch(()=>{}); } };
+  if(wantVideo) pc.addTransceiver("video",{direction:"recvonly"});
+  if(audioMode==="talk"){
+    try{ const mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      pc.addTrack(mic.getAudioTracks()[0], mic); pc._mic=mic; }
+    catch(e){ pc.addTransceiver("audio",{direction:"recvonly"}); }   // mic denied -> still receive door audio
+  } else if(audioMode==="recv"){
+    pc.addTransceiver("audio",{direction:"recvonly"});
+  }   // "none" -> no audio m-line at all (the pre-warmed VIDEO pc: no mic => go2rtc's VIGI two-way can't suppress video)
+  pc.ontrack=ev=>{ ms.addTrack(ev.track); if(sinkEl){ sinkEl.srcObject=ms; if(!got){ got=true; sinkEl.play&&sinkEl.play().catch(()=>{}); } } };
   const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
-  // go2rtc is NON-TRICKLE: our ICE candidates must be INSIDE the offer SDP, or media has no path back.
-  // So wait for ICE gathering to finish (with a 3s cap), then send the COMPLETE localDescription.
+  // go2rtc is NON-TRICKLE: candidates must ride INSIDE the offer SDP. Wait for gathering, but cap SHORT
+  // (STUN host/srflx gather in well under a second on this network — proven by live-view). Relay paths
+  // get a longer cap via gatherCapMs.
   await new Promise(res=>{
     if(pc.iceGatheringState==="complete") return res();
-    const done=()=>{ if(pc.iceGatheringState==="complete"){ pc.removeEventListener("icegatheringstatechange",done); res(); } };
+    const done=()=>{ if(pc.iceGatheringState==="complete"){ try{pc.removeEventListener("icegatheringstatechange",done);}catch(e){} res(); } };
     pc.addEventListener("icegatheringstatechange",done);
-    setTimeout(res, 3000);
+    setTimeout(res, capMs);
   });
   const id=nid();
   const answer=await new Promise(res=>{ const to=setTimeout(()=>{ rtcWaiters.delete(id); res(null); }, 15000);
@@ -399,7 +411,7 @@ $("#h-place").onclick=()=> startLive();
 async function startLive(){
   if(livePC) return;
   $("#h-place").textContent="Connecting to the door…";
-  const pc=await webrtc($("#h-live"), false, p=>livePC=p, "live_view");
+  const pc=await webrtc($("#h-live"), {video:true, audio:"recv", purpose:"live_view", gatherCapMs:800, keep:p=>livePC=p});
   if(!pc){ $("#h-place").textContent="Couldn't connect. Tap to retry."; livePC=null; }
   else { $("#h-place").classList.add("hidden"); $("#h-livetag").classList.remove("hidden"); $("#h-viewbtn").classList.add("hidden"); logStep("app.live_view_opened"); }
 }
@@ -503,7 +515,7 @@ $("#p-out").onclick=async()=>{
   clearInterval(seenTimer); clearInterval(callTimer); startAuth();
 };
 
-let CALL_ID=null, SHOWN="", callPC=null, micOn=false;
+let CALL_ID=null, SHOWN="", callPC=null, videoPC=null, micOn=false;   // videoPC = pre-warmed door video (opened on RING); callPC = talk/audio (opened on Accept)
 async function watchCall(){
   const r=await api("GET","/call/current"); if(r.status!==200) return;
   const c=r.body||{};
@@ -516,25 +528,44 @@ function showRinging(){
   $("#call-video").classList.add("hidden"); $("#call-still").classList.add("hidden");
   $("#call").classList.add("show");
   if(navigator.vibrate) navigator.vibrate([300,150,300]);
+  startCallVideo();   // PRE-WARM the door video the instant it rings, so Accept shows video immediately
+}
+// Door VIDEO peer connection (recvonly video, NO mic, STUN) — opened on RING and reused on Accept.
+// Video-only means go2rtc's VIGI two-way (which suppressed video when a mic shared the PC) can't touch it.
+async function startCallVideo(){
+  if(videoPC) return;                         // already warming/warmed for this ring
+  const pc=await webrtc($("#call-video"), {video:true, audio:"none", purpose:"live_view", gatherCapMs:800, keep:p=>videoPC=p});
+  if(!pc) videoPC=null;                        // failed; Accept will retry
 }
 function hideCall(){
   $("#call").classList.remove("show"); delete document.body.dataset.incall;
   try{ callPC&&callPC._echoAC&&callPC._echoAC.close(); }catch(e){}
   try{ callPC&&callPC._mic&&callPC._mic.getTracks().forEach(t=>t.stop()); }catch(e){}
-  try{ callPC&&callPC.close(); }catch(e){} callPC=null; micOn=false; CALL_ID=null;
+  try{ callPC&&callPC.close(); }catch(e){} callPC=null;
+  try{ videoPC&&videoPC.close(); }catch(e){} videoPC=null;
+  micOn=false; CALL_ID=null;
 }
 async function answerCall(choice){
-  await api("POST","/call/answer",{call_id:CALL_ID, choice});
-  logStep("app.call_answered",{choice});
+  const r=await api("POST","/call/answer",{call_id:CALL_ID, choice});
+  const ok=!!(r && r.status===200);
+  logStep("app.call_answered",{choice, ok});
+  if(!ok){   // the guard did NOT register this answer (call already ended, or an options/vocabulary mismatch).
+    // Do not open media the SCC isn't tracking — that silently decouples the call from the protocol
+    // (this is exactly what masked the accept-vs-see_live vocabulary bug). Surface it and close.
+    console.warn("call/answer rejected by guard:", r&&r.status, r&&r.body);
+    hideCall(); return;
+  }
   if(choice==="reject" || choice==="busy"){ hideCall(); return; }   // both decline (distinct keys)
-  // accept -> video + two-way audio
+  // accept -> video is ALREADY pre-warming from the ring; just reveal it and add the TALK (audio) path.
   document.body.dataset.incall="1";
   $("#call-ring").classList.add("hidden"); $("#call-live").classList.remove("hidden");
   micOn=true; $("#call-mic-l").textContent="Mute"; $("#call-mic").classList.remove("off");
   $("#call-video").classList.remove("hidden");
-  const pc=await webrtc($("#call-video"), true, p=>callPC=p, "call");
-  if(!pc){ $("#call-still").classList.remove("hidden"); return; }
-  echoGuard(pc);      // half-duplex ducking (see below)
+  if(!videoPC) startCallVideo();     // fallback if the ring-time pre-warm failed
+  // TALK pc: mic -> door backchannel + door audio -> #call-audio. Relay path, so a longer gather cap.
+  const tpc=await webrtc($("#call-audio"), {video:false, audio:"talk", purpose:"call", gatherCapMs:2500, keep:p=>callPC=p});
+  if(!tpc){ /* audio failed; video still up */ return; }
+  echoGuard(tpc);      // half-duplex ducking (see below)
 }
 // Echo mitigation (app-side, partial): while the INBOUND door audio is loud, disable our outbound mic so
 // the laptop-speaker -> laptop-mic feedback loop can't send the owner's own voice back as an echo. Proper
