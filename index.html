@@ -144,7 +144,7 @@
 </div>
 <div id="call" class="callover">
   <div class="callcard">
-    <div class="callvid"><video id="call-video" playsinline autoplay muted></video><audio id="call-audio" autoplay playsinline></audio><img id="call-still" class="hidden" alt=""/>
+    <div class="callvid"><video id="call-video" playsinline autoplay></video><img id="call-still" class="hidden" alt=""/>
       <div class="callmeta"><div class="big" id="call-who">Someone's at the door</div><div class="muted sm">Front door</div></div>
       <!-- RINGING: Accept + Reject (one row), Busy below -->
       <div id="call-ring" class="callbar">
@@ -184,7 +184,7 @@ import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js
    NOTE: the door-front conversation with a visitor is the GUARD's job (RAG, later) — the
    app never speaks; it only lets the OWNER see/talk on a call.
    ===================================================================================== */
-const APP_VERSION   = "1.3";                 // Gaaro User App version (aligned with SCC V28)
+const APP_VERSION   = "1.4";                 // Gaaro User App (aligned with SCC v25.2: answer-retry + concurrency + crops)
 /* ===== CONFIG — fill once. SUPABASE_ANON is publishable (safe in client). ICE is minted per
    call by the guard (/ice); the app holds NO TURN secret. ===== */
 const SUPABASE_URL  = "https://qbwbjcqgyaafpofumcho.supabase.co";
@@ -195,52 +195,7 @@ const ICE_FALLBACK = [{ urls:"stun:stun.cloudflare.com:3478" }, { urls:"stun:stu
 
 const $ = s => document.querySelector(s);
 let SESSION = localStorage.getItem("gaaro_session") || "";
-let REFRESH = localStorage.getItem("gaaro_refresh") || "";      // Supabase refresh_token (rotates on use)
-let EXP     = Number(localStorage.getItem("gaaro_exp") || 0);   // access_token expiry, unix seconds
 let PHONE = localStorage.getItem("gaaro_phone") || "", NEEDS_SETUP = false;
-
-/* ===== SESSION LIFECYCLE (fix: v1.2 stored only access_token and never refreshed, so after ~1h the
-   guard 401'd every call -> "Guard offline / No one yet" while the guard kept announcing locally). ===== */
-function _jwtExp(t){ try{ return Number(JSON.parse(atob(t.split(".")[1])).exp) || 0; }catch(e){ return 0; } }
-function _persistSession(j){
-  SESSION = j.access_token || "";
-  REFRESH = j.refresh_token || REFRESH;                         // keep old refresh if server omits it
-  EXP = Number(j.expires_at
-        || (j.expires_in ? Math.floor(Date.now()/1000) + Number(j.expires_in) : 0))
-        || _jwtExp(SESSION);
-  localStorage.setItem("gaaro_session", SESSION);
-  localStorage.setItem("gaaro_refresh", REFRESH);
-  localStorage.setItem("gaaro_exp", String(EXP));
-}
-function _clearSession(){
-  SESSION=""; REFRESH=""; EXP=0;
-  localStorage.removeItem("gaaro_session");
-  localStorage.removeItem("gaaro_refresh");
-  localStorage.removeItem("gaaro_exp");
-}
-let _refreshing=null;
-/* Returns true if we hold a valid (or just-refreshed) access_token; false = must re-authenticate.
-   Called before every guard request. No-op when the token is still fresh (60s margin). */
-async function ensureFresh(){
-  if(!SESSION) return false;
-  const exp = EXP || _jwtExp(SESSION);
-  if(exp && exp - 60 > Date.now()/1000) return true;            // still valid
-  if(!REFRESH){ _clearSession(); return false; }                // nothing to refresh with -> re-auth
-  if(_refreshing) return _refreshing;                           // coalesce concurrent refreshes
-  _refreshing = (async()=>{
-    try{
-      const resp = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-        method:"POST",
-        headers:{ "apikey":SUPABASE_ANON, "Content-Type":"application/json" },
-        body: JSON.stringify({ refresh_token: REFRESH }) });
-      const j = await resp.json().catch(()=>({}));
-      if(resp.ok && j.access_token){ _persistSession(j); return true; }
-      _clearSession(); return false;                            // refresh token rejected/expired -> re-auth
-    }catch(e){ return false; }                                  // transient network error -> keep tokens, retry next call
-    finally{ _refreshing=null; }
-  })();
-  return _refreshing;
-}
 let sb=null, chan=null, connected=false;
 
 async function channelFor(phone){
@@ -268,8 +223,7 @@ function onFrame(f){
   else if(f.t==="rtc" && rtcWaiters.has(f.id)){ rtcWaiters.get(f.id)(f); }
 }
 let _id=0; const nid=()=> (++_id)+"-"+Math.random().toString(36).slice(2,7);
-async function api(method, path, body){
-  await ensureFresh();                       // swap in a fresh access_token if ours is stale/expired
+function api(method, path, body){
   return new Promise(resolve=>{
     const id=nid();
     const to=setTimeout(()=>{ if(pending.has(id)){ pending.delete(id); resolve({status:504, body:{error:"guard didn't answer"}}); } }, 12000);
@@ -277,39 +231,39 @@ async function api(method, path, body){
     send({ t:"api", id, method, path, body, token: SESSION||undefined });
   });
 }
+// v1.4: some requests (notably answering a ringing call) must survive a transient rendezvous drop —
+// the guard can be briefly deaf while its websocket reconnects. Retry a few times on 504/网络.
+async function apiRetry(method, path, body, tries){
+  tries = tries || 3;
+  let last = {status:504, body:{error:"guard didn't answer"}};
+  for(let i=0;i<tries;i++){
+    last = await api(method, path, body);
+    if(last.status !== 504) return last;      // got a real reply (200/409/etc.) — done
+    await new Promise(r=>setTimeout(r, 600));  // brief wait for reconnect, then retry
+  }
+  return last;
+}
 // steps go to the GUARD (aggregated to the GAARO DB); the app never displays logs
 function logStep(name, tags){ try{ api("POST","/steps/ingest",{ step:name, tags:tags||{} }); }catch(e){} }
-async function webrtc(sinkEl, opts){
-  // opts = { video:bool(default true), audio:"recv"|"talk"|"none"(default "recv"),
-  //          purpose:"live_view"|"call", gatherCapMs:number, keep:fn }
-  opts = opts || {};
-  const purpose   = opts.purpose || "call";
-  const wantVideo = opts.video !== false;         // recvonly door video
-  const audioMode = opts.audio || "recv";         // recv door audio / talk (mic+door) / none
-  const capMs     = opts.gatherCapMs || 800;      // was a flat 3000ms — the biggest post-Accept delay
+async function webrtc(videoEl, talk, keep, purpose){
   let iceServers = ICE_FALLBACK;
-  try{ const r = await api("POST","/ice",{ purpose });
+  try{ const r = await api("POST","/ice",{ purpose: purpose||"call" });
     if(r.status===200 && r.body.iceServers && r.body.iceServers.length) iceServers = r.body.iceServers; }catch(e){}
-  const pc=new RTCPeerConnection({ iceServers }); if(opts.keep) opts.keep(pc);
+  const pc=new RTCPeerConnection({ iceServers }); keep&&keep(pc);
   const ms=new MediaStream(); let got=false;
-  if(wantVideo) pc.addTransceiver("video",{direction:"recvonly"});
-  if(audioMode==="talk"){
-    try{ const mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
-      pc.addTrack(mic.getAudioTracks()[0], mic); pc._mic=mic; }
-    catch(e){ pc.addTransceiver("audio",{direction:"recvonly"}); }   // mic denied -> still receive door audio
-  } else if(audioMode==="recv"){
-    pc.addTransceiver("audio",{direction:"recvonly"});
-  }   // "none" -> no audio m-line at all (the pre-warmed VIDEO pc: no mic => go2rtc's VIGI two-way can't suppress video)
-  pc.ontrack=ev=>{ ms.addTrack(ev.track); if(sinkEl){ sinkEl.srcObject=ms; if(!got){ got=true; sinkEl.play&&sinkEl.play().catch(()=>{}); } } };
+  pc.addTransceiver("video",{direction:"recvonly"});
+  if(talk){ try{ const mic=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+      pc.addTrack(mic.getAudioTracks()[0], mic); pc._mic=mic; }catch(e){ pc.addTransceiver("audio",{direction:"recvonly"}); } }
+  else pc.addTransceiver("audio",{direction:"recvonly"});
+  pc.ontrack=ev=>{ ms.addTrack(ev.track); videoEl.srcObject=ms; if(!got){ got=true; videoEl.play&&videoEl.play().catch(()=>{}); } };
   const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
-  // go2rtc is NON-TRICKLE: candidates must ride INSIDE the offer SDP. Wait for gathering, but cap SHORT
-  // (STUN host/srflx gather in well under a second on this network — proven by live-view). Relay paths
-  // get a longer cap via gatherCapMs.
+  // go2rtc is NON-TRICKLE: our ICE candidates must be INSIDE the offer SDP, or media has no path back.
+  // So wait for ICE gathering to finish (with a 3s cap), then send the COMPLETE localDescription.
   await new Promise(res=>{
     if(pc.iceGatheringState==="complete") return res();
-    const done=()=>{ if(pc.iceGatheringState==="complete"){ try{pc.removeEventListener("icegatheringstatechange",done);}catch(e){} res(); } };
+    const done=()=>{ if(pc.iceGatheringState==="complete"){ pc.removeEventListener("icegatheringstatechange",done); res(); } };
     pc.addEventListener("icegatheringstatechange",done);
-    setTimeout(res, capMs);
+    setTimeout(res, 3000);
   });
   const id=nid();
   const answer=await new Promise(res=>{ const to=setTimeout(()=>{ rtcWaiters.delete(id); res(null); }, 15000);
@@ -324,9 +278,7 @@ function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>
 (async function(){
   view("s-auth");
   if(PHONE){ try{ await connect(PHONE); }catch(e){} }
-  // Gate on a token-checked endpoint. /auth/status is PUBLIC (always 200) and cannot confirm sign-in;
-  // /status runs through the guard's token check, so a 200 here means our JWT is actually accepted.
-  if(SESSION && connected){ await ensureFresh(); if(SESSION){ const r=await api("GET","/status"); if(r.status===200){ return enterApp(); } } }
+  if(SESSION && connected){ const r=await api("GET","/auth/status"); if(r.status===200){ return enterApp(); } }
   startAuth();
 })();
 
@@ -367,7 +319,8 @@ $("#a-verify").onclick=async()=>{
       body:JSON.stringify({ type:"sms", phone:PHONE, token:otp }) });
     const j=await resp.json().catch(()=>({}));
     if(!(resp.ok && j.access_token)) throw (j.msg||j.error_description||j.error||"Wrong or expired code.");
-    _persistSession(j);                     // store access_token + refresh_token + expiry (fixes silent 1h expiry)
+    SESSION=j.access_token;                 // SESSION is now the real Supabase JWT (phone claim)
+    localStorage.setItem("gaaro_session", SESSION);
     // best-effort: connect to the guard over Broadcast for live-view/calls (unchanged transport)
     try{ await connect(PHONE); }catch(e){}
     enterApp();
@@ -375,7 +328,7 @@ $("#a-verify").onclick=async()=>{
 };
 
 let seenTimer=null, callTimer=null;
-function setVersionTag(){ const e=$("#p-version"); if(e) e.textContent="Gaaro User App v"+APP_VERSION+" · aligned with Gaaro SCC V28"; }
+function setVersionTag(){ const e=$("#p-version"); if(e) e.textContent="Gaaro User App v"+APP_VERSION+" · aligned with Gaaro SCC v25.2"; }
 function enterApp(){ setVersionTag();
   view("s-app"); goTab("home");
   logStep("app.signed_in");
@@ -411,7 +364,7 @@ $("#h-place").onclick=()=> startLive();
 async function startLive(){
   if(livePC) return;
   $("#h-place").textContent="Connecting to the door…";
-  const pc=await webrtc($("#h-live"), {video:true, audio:"recv", purpose:"live_view", gatherCapMs:800, keep:p=>livePC=p});
+  const pc=await webrtc($("#h-live"), false, p=>livePC=p, "live_view");
   if(!pc){ $("#h-place").textContent="Couldn't connect. Tap to retry."; livePC=null; }
   else { $("#h-place").classList.add("hidden"); $("#h-livetag").classList.remove("hidden"); $("#h-viewbtn").classList.add("hidden"); logStep("app.live_view_opened"); }
 }
@@ -511,11 +464,11 @@ $("#p-save").onclick=async()=>{
 };
 $("#p-out").onclick=async()=>{
   try{ await api("POST","/auth/logout",{token:SESSION}); }catch(e){}
-  _clearSession();
+  SESSION=""; localStorage.removeItem("gaaro_session");
   clearInterval(seenTimer); clearInterval(callTimer); startAuth();
 };
 
-let CALL_ID=null, SHOWN="", callPC=null, videoPC=null, micOn=false;   // videoPC = pre-warmed door video (opened on RING); callPC = talk/audio (opened on Accept)
+let CALL_ID=null, SHOWN="", callPC=null, micOn=false;
 async function watchCall(){
   const r=await api("GET","/call/current"); if(r.status!==200) return;
   const c=r.body||{};
@@ -528,44 +481,38 @@ function showRinging(){
   $("#call-video").classList.add("hidden"); $("#call-still").classList.add("hidden");
   $("#call").classList.add("show");
   if(navigator.vibrate) navigator.vibrate([300,150,300]);
-  startCallVideo();   // PRE-WARM the door video the instant it rings, so Accept shows video immediately
-}
-// Door VIDEO peer connection (recvonly video, NO mic, STUN) — opened on RING and reused on Accept.
-// Video-only means go2rtc's VIGI two-way (which suppressed video when a mic shared the PC) can't touch it.
-async function startCallVideo(){
-  if(videoPC) return;                         // already warming/warmed for this ring
-  const pc=await webrtc($("#call-video"), {video:true, audio:"none", purpose:"live_view", gatherCapMs:800, keep:p=>videoPC=p});
-  if(!pc) videoPC=null;                        // failed; Accept will retry
 }
 function hideCall(){
   $("#call").classList.remove("show"); delete document.body.dataset.incall;
   try{ callPC&&callPC._echoAC&&callPC._echoAC.close(); }catch(e){}
   try{ callPC&&callPC._mic&&callPC._mic.getTracks().forEach(t=>t.stop()); }catch(e){}
-  try{ callPC&&callPC.close(); }catch(e){} callPC=null;
-  try{ videoPC&&videoPC.close(); }catch(e){} videoPC=null;
-  micOn=false; CALL_ID=null;
+  try{ callPC&&callPC.close(); }catch(e){} callPC=null; micOn=false; CALL_ID=null;
 }
 async function answerCall(choice){
-  const r=await api("POST","/call/answer",{call_id:CALL_ID, choice});
-  const ok=!!(r && r.status===200);
-  logStep("app.call_answered",{choice, ok});
-  if(!ok){   // the guard did NOT register this answer (call already ended, or an options/vocabulary mismatch).
-    // Do not open media the SCC isn't tracking — that silently decouples the call from the protocol
-    // (this is exactly what masked the accept-vs-see_live vocabulary bug). Surface it and close.
-    console.warn("call/answer rejected by guard:", r&&r.status, r&&r.body);
-    hideCall(); return;
+  const btnRing=$("#call-ring");
+  if(btnRing) btnRing.style.opacity=".5";                 // visual: tap registered, awaiting guard
+  const r = await apiRetry("POST","/call/answer",{call_id:CALL_ID, choice}, 3);
+  if(btnRing) btnRing.style.opacity="";
+  logStep("app.call_answered",{choice, status:r.status});
+  // v1.4 concurrency: guard is the single source of truth. A second device gets 409 already_handled.
+  if(r.status===409 && r.body && r.body.error==="already_handled"){
+    $("#call-who").textContent = "Handled on another device";
+    setTimeout(hideCall, 1600); return;
   }
+  if(r.status===504){        // guard never answered even after retries — don't fake a live call
+    $("#call-who").textContent = "Couldn't reach the guard — try again";
+    if(btnRing) btnRing.style.opacity=""; return;
+  }
+  if(r.status!==200){ $("#call-who").textContent="Call could not be answered"; setTimeout(hideCall,1600); return; }
   if(choice==="reject" || choice==="busy"){ hideCall(); return; }   // both decline (distinct keys)
-  // accept -> video is ALREADY pre-warming from the ring; just reveal it and add the TALK (audio) path.
+  // accept -> video + two-way audio
   document.body.dataset.incall="1";
   $("#call-ring").classList.add("hidden"); $("#call-live").classList.remove("hidden");
   micOn=true; $("#call-mic-l").textContent="Mute"; $("#call-mic").classList.remove("off");
   $("#call-video").classList.remove("hidden");
-  if(!videoPC) startCallVideo();     // fallback if the ring-time pre-warm failed
-  // TALK pc: mic -> door backchannel + door audio -> #call-audio. Relay path, so a longer gather cap.
-  const tpc=await webrtc($("#call-audio"), {video:false, audio:"talk", purpose:"call", gatherCapMs:2500, keep:p=>callPC=p});
-  if(!tpc){ /* audio failed; video still up */ return; }
-  echoGuard(tpc);      // half-duplex ducking (see below)
+  const pc=await webrtc($("#call-video"), true, p=>callPC=p, "call");
+  if(!pc){ $("#call-still").classList.remove("hidden"); return; }
+  echoGuard(pc);      // half-duplex ducking (see below)
 }
 // Echo mitigation (app-side, partial): while the INBOUND door audio is loud, disable our outbound mic so
 // the laptop-speaker -> laptop-mic feedback loop can't send the owner's own voice back as an echo. Proper
