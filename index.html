@@ -263,7 +263,9 @@ async function webrtc(videoEl, talk, keep, purpose){
     if(pc.iceGatheringState==="complete") return res();
     const done=()=>{ if(pc.iceGatheringState==="complete"){ pc.removeEventListener("icegatheringstatechange",done); res(); } };
     pc.addEventListener("icegatheringstatechange",done);
-    setTimeout(res, 3000);
+    // v1.4: cap at 1.2s (was 3s). On-LAN the host candidate is ready almost immediately; waiting for
+    // slow free-TURN relay candidates was adding seconds before the offer even went out. Send fast.
+    setTimeout(res, 1200);
   });
   const id=nid();
   const answer=await new Promise(res=>{ const to=setTimeout(()=>{ rtcWaiters.delete(id); res(null); }, 15000);
@@ -333,6 +335,9 @@ function enterApp(){ setVersionTag();
   view("s-app"); goTab("home");
   logStep("app.signed_in");
   refreshStatus(); refreshSeen();
+  // v1.4: auto-open the live door view on load — no tap needed. If the guard is up, start streaming;
+  // otherwise the placeholder stays and the user can tap to retry.
+  refreshStatus().then(()=>{ if(connected) startLive(); });
   seenTimer=setInterval(()=>{ refreshStatus(); refreshSeen(); }, 8000);
   callTimer=setInterval(watchCall, 2500); watchCall(); loadProfile();
 }
@@ -510,8 +515,11 @@ async function answerCall(choice){
   $("#call-ring").classList.add("hidden"); $("#call-live").classList.remove("hidden");
   micOn=true; $("#call-mic-l").textContent="Mute"; $("#call-mic").classList.remove("off");
   $("#call-video").classList.remove("hidden");
+  $("#call-who").textContent="Connecting video…";       // v1.4: tell the user video is on its way
   const pc=await webrtc($("#call-video"), true, p=>callPC=p, "call");
-  if(!pc){ $("#call-still").classList.remove("hidden"); return; }
+  if(!pc){ $("#call-still").classList.remove("hidden"); $("#call-who").textContent="Audio only"; return; }
+  // clear the 'connecting' label once the first video frame lands (ontrack -> play)
+  try{ const v=$("#call-video"); v.addEventListener("playing",()=>{ $("#call-who").textContent="Front door"; },{once:true}); }catch(e){}
   echoGuard(pc);      // half-duplex ducking (see below)
 }
 // Echo mitigation (app-side, partial): while the INBOUND door audio is loud, disable our outbound mic so
