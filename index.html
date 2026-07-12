@@ -111,6 +111,12 @@
     <div id="tab-enroll" class="tab hidden" style="flex:1">
       <h2 style="margin:6px 0 4px">Add a face</h2>
       <p class="muted sm" style="margin:0 0 14px">The guard learns this person across three angles so it stays quiet for them. Faces never leave your guard.</p>
+      <label>Who is this? <span class="muted xs">(picks the guard's greeting style — GSOP-F01)</span></label>
+      <select id="e-kind" class="field">
+        <option value="">Adult (standard greeting)</option>
+        <option value="child">Child — "Hello, {name}. Welcome back."</option>
+        <option value="elder">Elderly — respectful greeting</option>
+      </select>
       <label>Their name</label><input id="e-name" class="field" placeholder="e.g. Achan" autocomplete="off"/>
       <div id="e-camwrap" class="hidden" style="margin-top:16px">
         <div id="e-cam" class="cam">
@@ -131,6 +137,15 @@
         <label>Set a password <span class="muted xs">(optional)</span></label>
         <input id="p-pass" class="field" type="password" placeholder="••••••••" autocomplete="new-password"/>
         <button id="p-save" class="btn">Save</button><div id="p-msg" class="err"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <label>Door speaker volume <span class="muted xs">(the camera's spoken replies)</span></label>
+        <div style="display:flex;align-items:center;gap:12px">
+          <input id="p-vol" type="range" min="0.2" max="4" step="0.1" value="1" style="flex:1"/>
+          <span id="p-vol-v" class="muted sm" style="min-width:42px;text-align:right">1.0×</span>
+        </div>
+        <p class="muted xs" style="margin:6px 0 0">Applies on the guard's next spoken line. Raise the camera's own volume (VIGI settings) before pushing past 2×.</p>
+        <div id="p-vol-msg" class="err"></div>
       </div>
       <button id="p-out" class="btn ghost" style="margin-top:16px">Sign out</button>
       <p class="muted xs" id="p-version" style="margin-top:16px;text-align:center;opacity:.6"></p>
@@ -448,7 +463,8 @@ function eApply(fb){
 }
 async function eFinish(){
   eRunning=false; const name=$("#e-name").value.trim();
-  try{ const r=await api("POST","/enroll/finalize",{session_id:eSid});
+  try{ const kind=($("#e-kind")&&$("#e-kind").value)||"";
+    const r=await api("POST","/enroll/finalize",{session_id:eSid, ...(kind?{kind}:{})});
     if(r.status===200){ logStep("app.face_enrolled"); } }catch(e){}
   eSid=null; $("#e-done").style.display="flex";
   $("#e-title").textContent=name+" is enrolled";
@@ -459,7 +475,27 @@ async function eFinish(){
 async function loadProfile(){
   const j=(await api("GET","/auth/status")).body||{};
   $("#p-name").value=j.name||""; $("#p-phone").textContent=j.has_phone?("Signed in"+(j.name?(" as "+j.name):"")):"";
+  // v25.26 companion: current speaker gain from the guard's param surface (admin read)
+  try{ const p=(await api("GET","/params")).body;
+    const g=(p&&p.params||[]).find(x=>x.key==="door.speaker_gain");
+    if(g){ $("#p-vol").value=g.value ?? g.default ?? 1; $("#p-vol-v").textContent=(+$("#p-vol").value).toFixed(1)+"×"; }
+  }catch(e){}
 }
+// DOOR SPEAKER VOLUME -> the guard's gated write surface (v25.21 POST /params/set).
+// Debounced so a drag is ONE write; the guard clamps (0.2-4.0) and answers with the applied value.
+let _volT=null;
+$("#p-vol").oninput=()=>{ $("#p-vol-v").textContent=(+$("#p-vol").value).toFixed(1)+"×";
+  clearTimeout(_volT);
+  _volT=setTimeout(async()=>{
+    const want=parseFloat($("#p-vol").value);
+    const r=await api("POST","/params/set",{key:"door.speaker_gain",value:want});
+    if(r.status===200&&r.body.ok){ $("#p-vol-msg").className="err ok";
+      $("#p-vol-msg").textContent="Volume "+(+r.body.applied).toFixed(1)+"×"+(r.body.clamped?" (clamped by the guard)":"")+" — next spoken line.";
+      if(r.body.clamped){ $("#p-vol").value=r.body.applied; $("#p-vol-v").textContent=(+r.body.applied).toFixed(1)+"×"; }
+      logStep("app.volume_set",{gain:r.body.applied});
+    } else { $("#p-vol-msg").className="err"; $("#p-vol-msg").textContent="Couldn't set volume — is the guard online?"; }
+  }, 450);
+};
 $("#p-save").onclick=async()=>{
   $("#p-msg").textContent="Saving…"; $("#p-msg").className="err";
   const body={name:$("#p-name").value.trim()}; const pw=$("#p-pass").value; if(pw) body.password=pw;
